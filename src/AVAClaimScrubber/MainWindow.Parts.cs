@@ -13,6 +13,7 @@ public sealed partial class MainWindow
     [
         new TabItem { Header = "Rules", Content = BuildRulesPage(), FontSize = 14 },
         new TabItem { Header = "Code Sets", Content = BuildCodeSetsPage(), FontSize = 14 },
+        new TabItem { Header = "Responses", Content = new ScrollViewer { Content = ResponsesPanel }, FontSize = 14 },
     ];
     private partial IEnumerable<object> MoreMenus(Func<string, Action, Key?, KeyModifiers, MenuItem> item) => [];
 
@@ -20,10 +21,12 @@ public sealed partial class MainWindow
         [
             item("_Rules", () => { ShowRules(); Tabs.SelectedIndex = 3; }, Key.D4, KeyModifiers.Control),
             item("Code _Sets", () => { ShowCodeSets(); Tabs.SelectedIndex = 4; }, Key.D5, KeyModifiers.Control),
+            item("R_esponses", () => { ShowResponses(); Tabs.SelectedIndex = 5; }, Key.D6, KeyModifiers.Control),
         ];
     private partial IEnumerable<object> MoreFileItems(Func<string, Action, Key?, KeyModifiers, MenuItem> item) =>
         [
             item("Save Corrected _Copy…", () => _ = SaveCorrected(), null, KeyModifiers.None),
+            item("_Export Report…", () => _ = ExportReport(), Key.E, KeyModifiers.Control),
             item("Add Rule _Pack…", () => _ = AddPicked(), null, KeyModifiers.None),
             new Separator(),
         ];
@@ -70,5 +73,6 @@ public sealed partial class MainWindow
         LoadCodeSets();
         ShowRules();
         ShowCodeSets();
+        ShowResponses();
     }
 }

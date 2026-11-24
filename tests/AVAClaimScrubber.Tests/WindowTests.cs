@@ -115,6 +115,50 @@ public sealed class CorrectionWindowTests
     });
 }
 
+public sealed class ResponseWindowTests
+{
+    [Fact]
+    public void A_remittance_opened_beside_its_claims_is_replayed_and_drafts_a_pack_and_a_report() => HeadlessApp.Run(() =>
+    {
+        var root = Samples.Copy();
+        var w = new MainWindow([Path.Combine(root, "payer-837p.x12"), Path.Combine(root, "edits-837p.x12"), Path.Combine(root, "coding-errors.x12")]);
+        w.Show();
+        HeadlessApp.Settle();
+        w.Open(Path.Combine(root, "responses", "sunplan-835.x12"));
+        HeadlessApp.Settle();
+        Assert.Equal(5, w.Tabs.SelectedIndex);
+        Assert.Equal(3, w.OpenFiles.Count);
+        Assert.Equal("Read sunplan-835.x12 (835 remittance): 10 claims, 5 denied, 7 lines unpaid, 611.00 paid. 8 denials: 3 caught by a check, 3 missed, 2 not checkable from a claim.", w.txtStatusBar.Text);
+        var text = string.Join("\n", w.ResponsesPanel.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+        Assert.Contains("CO-197 Precertification/authorization/notification/pre-treatment absent.", text);
+        Assert.Contains("Caught by N1", text);
+
+        var draft = Path.Combine(root, "drafted.json");
+        w.PickSaveFile = (_, _) => Task.FromResult<string?>(draft);
+        w.SaveDraft(w.Replays.Single()).GetAwaiter().GetResult();
+        Assert.StartsWith("Saved drafted.json with 3 drafted rules.", w.txtStatusBar.Text);
+        // Added as a pack, the three missed denials are caught.
+        w.AddRulePack(draft);
+        HeadlessApp.Settle();
+        Assert.Equal(0, w.Replays.Single().Count(Core.Responses.Verdict.Missed));
+
+        foreach (var name in new[] { "report.html", "report.xlsx" })
+        {
+            var report = Path.Combine(root, name);
+            w.PickSaveFile = (_, _) => Task.FromResult<string?>(report);
+            w.ExportReport().GetAwaiter().GetResult();
+            Assert.True(new FileInfo(report).Length > 1000);
+        }
+        var html = File.ReadAllText(Path.Combine(root, "report.html"));
+        Assert.Contains("Denial replay: sunplan-835.x12", html);
+        Assert.Contains("handle it as you handle the claims", html);
+        using var book = new ClosedXML.Excel.XLWorkbook(Path.Combine(root, "report.xlsx"));
+        Assert.Equal(["Summary", "Claims", "Findings", "Rules", "Denials"], book.Worksheets.Select(s => s.Name));
+        Assert.Equal(9, book.Worksheet("Denials").RowsUsed().Count());
+        w.Close();
+    });
+}
+
 internal static class VisualExtensions
 {
     public static IEnumerable<Avalonia.Visual> GetVisualDescendants(this Avalonia.Visual v) => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(v);

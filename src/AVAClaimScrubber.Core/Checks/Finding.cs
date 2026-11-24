@@ -22,7 +22,7 @@ public enum Severity
 /// dates, C code sets, N NCCI and MUE, P payer), what it checks, why it matters, where it comes from, and how bad
 /// breaking it is.
 /// </summary>
-public sealed record Rule(string Id, int Layer, string Title, string Why, string Source, Severity Severity);
+public sealed record Rule(string Id, int Layer, string Title, string Why, string Source, Severity Severity, string Kind = "");
 
 /// <summary>A change that would fix a finding: element <see cref="Element"/> (component <see cref="Component"/>, 0 for all of it) of the file's segment <see cref="SegmentIndex"/>.</summary>
 public sealed record Fix(int SegmentIndex, int Element, int Component, string NewValue, string Description);

@@ -210,6 +210,9 @@ public sealed partial class MainWindow : Window
     /// <summary>A file with no claims (a 999, 277CA or 835): later parts read those.</summary>
     partial void OpenedOther(string path, ClaimBatch batch);
 
+    /// <summary>After every file is checked again: later parts refresh what depends on the findings.</summary>
+    partial void Rechecked();
+
     /// <summary>What the checks run with (code sets, payer rules): later parts fill it.</summary>
     private partial ScrubSettings Settings();
 
@@ -227,6 +230,7 @@ public sealed partial class MainWindow : Window
         else ShowBatchPanel();
         FillFindings();
         ShowRules();
+        Rechecked();
         Say("Checked again.");
     }
 

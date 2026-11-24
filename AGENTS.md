@@ -35,6 +35,12 @@ cd samples && python3 make_samples.py        # remakes the sample claims
     MUE, age and sex by ICD-10-CM chapter), `PayerRuleChecks` (layer 6: the packs' rules, ids P-pack-id; kinds
     timely-filing, prior-auth, require-modifier, max-units, not-covered), `Corrector` (a corrected copy: the fixes, and
     nothing else, in a new file).
+  - `Responses/`: `ResponseCodes` (CARC, RARC and 277 status codes, worded as x12.org publishes them; only the ones
+    used), `Responses` (`ResponseReader`: 999 → `Ack`, 277CA → `ClaimStatus`, 835 → `RemitClaim`; IK4-04, the bad value
+    as sent, is never kept), `Replay` (each denial or rejection matched to its claim by CLM01, a 999's by control
+    numbers and segment position; reason codes mapped to the checks that answer to them; verdicts Caught, Missed,
+    NotCheckable, NoClaim; `Draft` writes a rule pack from the missed denials a payer rule would catch).
+  - `Reports/Report.cs`: the HTML page and the Excel workbook (ClosedXML).
   - `CodeSets/`: `CodeSets` (ICD-10-CM, HCPCS Level II and modifiers, NUCC taxonomy, licensed CPT: parsers for each
     publisher's file layout, and a store in the settings folder with a manifest of where each came from),
     `PlaceOfService` (built in, from CMS's page), `Updater` (downloads from CMS and NUCC, only when asked). NCCI PTP
@@ -58,6 +64,12 @@ cd samples && python3 make_samples.py        # remakes the sample claims
   `tests/…/Data/`, unchanged excerpts of the real files. CPT is the AMA's: shape only unless a licensed file is
   loaded, and none is in the repository. The test NCCI pairs are invented (and say so); never put CMS's PTP files in
   the repository. `CLAIMS_LIVE_DOWNLOADS=1 dotnet test` checks the real downloads still work.
+- **A reason code maps to checks, and the map is the claim.** `Replay.Carc`, `Rarc`, `Status` and the 999 maps say which
+  rules answer to which codes; a new rule that answers to a denial goes into them, with a planted denial in
+  `samples/responses` and a line in `ReplayTests`. Codes that nothing in a claim can show (eligibility, medical
+  necessity) are `NotCheckable`, with the reason: never call those misses.
+- **Drafted rules are drafts.** `Replay.Draft` saves a pack with `"draft": true` and each rule's evidence in its "why";
+  the window saves it to a file and never adds it: a person checks it against the payer's policy first.
 - **Dates are checked as of the batch's creation (BHT04)**, not today, so a file checks the same whenever it's checked.
 - **No real claims in the repository.** Every person, member, provider, NPI and tax ID in the samples is invented.
 

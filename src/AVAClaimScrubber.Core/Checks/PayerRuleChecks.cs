@@ -32,7 +32,7 @@ public sealed class PayerRuleChecks(IReadOnlyList<RulePack> packs) : ICheck
             "not-covered" => $"{pack.Name} doesn't cover some procedures",
             _ => kind,
         };
-        return new Rule($"P-{Slug(pack.Name)}-{id}", 6, title, (string?)j["why"] ?? title + ".", $"Rule pack \"{pack.Name}\" version {pack.Version}", severity);
+        return new Rule($"P-{Slug(pack.Name)}-{id}", 6, title, (string?)j["why"] ?? title + ".", $"Rule pack \"{pack.Name}\" version {pack.Version}", severity, kind);
     }
 
     private static string Slug(string name) => new([.. name.ToLowerInvariant().Where(char.IsLetterOrDigit)]);
