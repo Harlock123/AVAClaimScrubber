@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The window: the batches and their claims, each claim's loops and segments with its findings, and the fixes. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>AVAClaimScrubber</AssemblyName>
+    <RootNamespace>AVAClaimScrubber</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
+    <!-- Avalonia.FreeDesktop 11.3.12 pulls Tmds.DBus.Protocol 0.21.2, which has a high-severity advisory
+         (CVE-2026-39959); take the patched one. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+    <ProjectReference Include="..\AVAClaimScrubber.Core\AVAClaimScrubber.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="AVAClaimScrubber.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Reading 837 claims and checking them: the X12 reader (X12 Explorer's), the claim loops, the checks, the rules,
+       code sets, responses and reports. No Avalonia, so the tests check it without a window. -->
+  <PropertyGroup>
+    <RootNamespace>AVAClaimScrubber.Core</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="AVAClaimScrubber.Tests" />
+  </ItemGroup>
+</Project>
