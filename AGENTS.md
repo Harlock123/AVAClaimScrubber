@@ -29,11 +29,14 @@ cd samples && python3 make_samples.py        # remakes the sample claims
     837's segments into the implementation guide's loops: 1000A/B, 2000A/B/C, 2010xx, 2300, 2310x, 2320, 2330x,
     2400, 2410, 2420x, 2430).
   - `Checks/`: `Finding` (with `Rule`, `Fix`, `ScrubContext`, `ICheck`), `EnvelopeChecks` (layer 1: E and S rules),
-    `ArithmeticChecks` (layer 3: A rules), `Scrubber` (runs the layers).
+    `StructureChecks` (layer 2: L rules, the HL hierarchy, required loops, lines, pointers), `ArithmeticChecks`
+    (layer 3: A rules), `RulePack` (JSON packs: overrides per payer, and payer rules), `Scrubber` (runs the layers,
+    then applies the packs' overrides).
 - `src/AVAClaimScrubber/`: the window, built in code (`MainWindow.cs`; `MainWindow.Parts.cs` holds the hooks later
-  parts fill).
+  parts fill; `MainWindow.Rules.cs` the Rules tab and the packs). Settings (rules, code sets) live under
+  `MainWindow.SettingsFolder`, which tests point at a temporary folder (`SettingsIsolation`).
 - `tests/AVAClaimScrubber.Tests/`: xUnit v3 on Avalonia.Headless.
-- `samples/`: invented claims, from `make_samples.py`.
+- `samples/`: invented claims, from `make_samples.py`; `samples/rules/` an invented payer's rule pack.
 
 ## Rules that keep it working
 

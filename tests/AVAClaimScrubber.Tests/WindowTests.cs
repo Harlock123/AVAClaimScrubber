@@ -52,6 +52,30 @@ public sealed class WindowTests
     });
 }
 
+public sealed class RulesWindowTests
+{
+    [Fact]
+    public void A_rule_pack_added_changes_the_findings_and_shows_on_the_rules_tab() => HeadlessApp.Run(() =>
+    {
+        var w = new MainWindow([Samples.Path("hospital-837i.x12")]);
+        w.Show();
+        HeadlessApp.Settle();
+        Assert.Equal(Core.Checks.Severity.Deny, w.OpenFiles[0].Result.Findings.Single().Severity);
+        w.AddRulePack(Samples.Path("rules/sunplan.json"));
+        HeadlessApp.Settle();
+        Assert.Equal(Core.Checks.Severity.Warn, w.OpenFiles[0].Result.Findings.Single().Severity);
+        var text = string.Join("\n", w.RulesPanel.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? string.Concat(t.Inlines?.OfType<Avalonia.Controls.Documents.Run>().Select(r => r.Text) ?? [])));
+        Assert.Contains("Sun Plan", text);
+        Assert.Contains("A4: warn", text);
+        Assert.Contains("Lines fall inside the statement period", text);
+        Assert.Contains("1 in the open files", text);
+        Assert.StartsWith(MainWindow.FolderOverride!, w.RulesFolder);
+        w.AddRulePack(Samples.Path("clinic-837p.x12"));
+        Assert.StartsWith("That rule pack doesn't read", w.txtStatusBar.Text);
+        w.Close();
+    });
+}
+
 internal static class VisualExtensions
 {
     public static IEnumerable<Avalonia.Visual> GetVisualDescendants(this Avalonia.Visual v) => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(v);

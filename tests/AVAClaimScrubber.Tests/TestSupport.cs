@@ -29,3 +29,11 @@ public static class HeadlessApp
         }
     }
 }
+
+/// <summary>Before any test runs, the program's settings folder (rules, code sets, AI settings) is a temporary one.</summary>
+internal static class SettingsIsolation
+{
+    [System.Runtime.CompilerServices.ModuleInitializer]
+    internal static void Isolate() =>
+        AVAClaimScrubber.MainWindow.FolderOverride = Directory.CreateTempSubdirectory("avaclaimscrubber-settings-").FullName;
+}

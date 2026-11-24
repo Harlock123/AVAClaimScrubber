@@ -23,7 +23,7 @@ public static class ClaimReader
             var root = BuildLoops(t, kind);
             batch.Transactions.Add((t, root, kind));
             var created = t.Body.FirstOrDefault(s => s.Id == "BHT") is { } bht ? Parse.Date(bht[4]) : null;
-            foreach (var clm in root.All().Where(l => l.Id == "2300"))
+            foreach (var clm in root.All().Where(l => l.Id == "2300").OrderBy(l => l.Segments[0].Index))
             {
                 var hl = clm.Parent;
                 var subscriber = hl?.Id == "2000C" ? hl.Parent : hl;

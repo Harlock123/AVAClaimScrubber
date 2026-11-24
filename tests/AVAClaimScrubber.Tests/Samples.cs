@@ -43,3 +43,19 @@ public static class Samples
     public static List<string> Pinned(this ScrubResult r) =>
         [.. r.Findings.Select(f => f.Rule.Id + " " + (f.Claim == 0 ? "envelope" : r.Batch.Claims.First(c => c.Number == f.Claim).Account) + (f.Line > 0 ? $" line {f.Line}" : "")).Order(StringComparer.Ordinal)];
 }
+
+public sealed class Dump
+{
+    [Fact]
+    public void Print()
+    {
+        if (Environment.GetEnvironmentVariable("CLAIMS_DUMP") is not { } o) return;
+        using var w = new StreamWriter(o);
+        foreach (var f in Directory.EnumerateFiles(Samples.Folder, "*.x12").Order())
+        {
+            var r = Samples.Scrub(Path.GetFileName(f));
+            w.WriteLine("== " + Path.GetFileName(f));
+            foreach (var x in r.Findings) w.WriteLine($"{x.Rule.Id} {(x.Claim > 0 ? r.Batch.Claims.First(c => c.Number == x.Claim).Account : "envelope")} {x.Place}: {x.Message}{(x.Fix != null ? "  FIX " + x.Fix.Description : "")}");
+        }
+    }
+}

@@ -8,8 +8,23 @@ namespace AVAClaimScrubber;
 /// <summary>The hooks later parts of the window fill: more tabs, menus and settings.</summary>
 public sealed partial class MainWindow
 {
-    private partial IEnumerable<TabItem> MoreTabs() => [];
+    private partial IEnumerable<TabItem> MoreTabs() => [new TabItem { Header = "Rules", Content = BuildRulesPage(), FontSize = 14 }];
     private partial IEnumerable<object> MoreMenus(Func<string, Action, Key?, KeyModifiers, MenuItem> item) => [];
-    private partial IEnumerable<object> MoreFileItems(Func<string, Action, Key?, KeyModifiers, MenuItem> item) => [];
-    private partial ScrubSettings Settings() => new();
+
+    private partial IEnumerable<object> MoreViewItems(Func<string, Action, Key?, KeyModifiers, MenuItem> item) =>
+        [item("_Rules", () => { ShowRules(); Tabs.SelectedIndex = 3; }, Key.D4, KeyModifiers.Control)];
+    private partial IEnumerable<object> MoreFileItems(Func<string, Action, Key?, KeyModifiers, MenuItem> item) =>
+        [item("Add Rule _Pack…", () => _ = AddPicked(), null, KeyModifiers.None), new Separator()];
+
+    private async Task AddPicked()
+    {
+        if (await PickRulePack() is { } p) AddRulePack(p);
+    }
+    private partial ScrubSettings Settings() => PackSettings();
+
+    partial void AfterBuild()
+    {
+        LoadPacks();
+        ShowRules();
+    }
 }

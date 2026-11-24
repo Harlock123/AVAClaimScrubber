@@ -44,6 +44,43 @@ public sealed class FindingsTests
     }
 
     [Fact]
+    public void The_structure_problems_are_found_on_the_claims_they_break()
+    {
+        var r = Samples.Scrub("structure-errors.x12");
+        Assert.Equal(
+        [
+            "L10 LXGAP-02 line 3",
+            "L11 POINTER-01 line 1",
+            "L2 PARENT-04",
+            "L6 NOPAYER-05",
+            "L8 NODX-03",
+        ], r.Pinned());
+        Assert.Equal(["POINTER-01", "LXGAP-02", "NODX-03", "PARENT-04", "NOPAYER-05"], r.Batch.Claims.Select(c => c.Account));
+        Assert.Equal("Number it 2", r.Findings.Single(f => f.Rule.Id == "L10").Fix!.Description);
+        Assert.Equal("Line 1 points at diagnosis 3, and the claim has 1.", r.Findings.Single(f => f.Rule.Id == "L11").Message);
+    }
+
+    [Fact]
+    public void Rule_packs_turn_rules_off_or_change_their_severity_for_their_payers()
+    {
+        var pack = Core.Checks.RulePack.Read("""
+            { "format": "avaclaimscrubber.rules", "name": "Sun Plan", "payers": ["SUN01"],
+              "overrides": { "A4": { "severity": "warn", "why": "Sun Plan pays lines outside the period" },
+                             "S4": { "enabled": false } } }
+            """);
+        var settings = new ScrubSettings { Packs = [pack] };
+        var p = Samples.Scrub("clinic-837p.x12", settings);
+        Assert.DoesNotContain(p.Findings, f => f.Rule.Id == "S4");
+        var i = Samples.Scrub("hospital-837i.x12", settings);
+        Assert.Equal(Severity.Warn, i.Findings.Single().Severity);
+        // A pack for another payer changes nothing.
+        var other = new ScrubSettings { Packs = [Core.Checks.RulePack.Read("""{ "format": "avaclaimscrubber.rules", "name": "Other", "payers": ["XYZ"], "overrides": { "S4": { "enabled": false } } }""")] };
+        Assert.Contains(Samples.Scrub("clinic-837p.x12", other).Findings, f => f.Rule.Id == "S4");
+        Assert.Contains("doesn't exist", Assert.Throws<FormatException>(() => Core.Checks.RulePack.Read("""{ "format": "avaclaimscrubber.rules", "name": "x", "overrides": { "Z9": { "enabled": false } } }""")).Message);
+        Assert.Contains("info, warn, deny or reject", Assert.Throws<FormatException>(() => Core.Checks.RulePack.Read("""{ "format": "avaclaimscrubber.rules", "name": "x", "overrides": { "A1": { "severity": "loud" } } }""")).Message);
+    }
+
+    [Fact]
     public void Findings_say_where_and_how_to_fix_without_quoting_dates_or_names()
     {
         var r = Samples.Scrub("clinic-837p.x12");
@@ -61,7 +98,7 @@ public sealed class FindingsTests
         {
             Assert.DoesNotMatch(@"20\d{6}", f.Message);
             Assert.DoesNotContain("SUN1", f.Message);
-            Assert.DoesNotContain(r.Batch.Claims.First(c => c.Number == f.Claim).Account, f.Message);
+            if (f.Claim > 0) Assert.DoesNotContain(r.Batch.Claims.First(c => c.Number == f.Claim).Account, f.Message);
         }
     }
 

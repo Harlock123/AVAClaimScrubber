@@ -95,9 +95,7 @@ public sealed class EnvelopeChecks : ICheck
         Need(claim.Clm, 1, "CLM01", "the patient account number");
         Need(claim.Clm, 2, "CLM02", "the claim's total charge");
         Need(claim.Clm, 5, "CLM05", claim.Kind == ClaimKind.Professional ? "place of service and frequency" : "bill type");
-        var billing = claim.BillingNpi;
-        if (billing == null) c.Add(S1, "The billing provider (2010AA NM1*85) is missing.", claim, loop: "2010AA");
-        else Need(billing, 9, "NM109", "the billing provider's NPI");
+        if (claim.BillingNpi is { } billing) Need(billing, 9, "NM109", "the billing provider's NPI");
         if (claim.Total == null && claim.Clm[2].Trim().Length > 0) c.Add(S3, "CLM02 isn't a number.", claim, segment: claim.Clm, element: "CLM02");
         else if (Decimals(claim.Clm[2]) > 2) c.Add(S3, "CLM02 has more than two decimal places.", claim, segment: claim.Clm, element: "CLM02");
 

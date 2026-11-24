@@ -1,0 +1,11 @@
+{
+  "format": "avaclaimscrubber.rules",
+  "name": "Sun Plan",
+  "version": "2026.11",
+  "description": "An invented payer's rules, to show what a pack can say.",
+  "payers": ["SUN01"],
+  "overrides": {
+    "A4": { "severity": "warn", "why": "Sun Plan pays a line dated outside the statement period, with a remark." }
+  },
+  "rules": []
+}

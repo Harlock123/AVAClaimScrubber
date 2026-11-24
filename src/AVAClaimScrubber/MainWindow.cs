@@ -134,6 +134,7 @@ public sealed partial class MainWindow : Window
     private partial IEnumerable<TabItem> MoreTabs();
     private partial IEnumerable<object> MoreMenus(Func<string, Action, Key?, KeyModifiers, MenuItem> item);
     private partial IEnumerable<object> MoreFileItems(Func<string, Action, Key?, KeyModifiers, MenuItem> item);
+    private partial IEnumerable<object> MoreViewItems(Func<string, Action, Key?, KeyModifiers, MenuItem> item);
 
     private Menu BuildMenu()
     {
@@ -162,12 +163,13 @@ public sealed partial class MainWindow : Window
         var view = new MenuItem
         {
             Header = "_View",
-            ItemsSource = new object[]
-            {
+            ItemsSource = (object[])
+            [
                 Item("_Batch", () => Tabs.SelectedIndex = 0, Key.D1, KeyModifiers.Control),
                 Item("_Claim", () => Tabs.SelectedIndex = 1, Key.D2, KeyModifiers.Control),
                 Item("_Findings", () => Tabs.SelectedIndex = 2, Key.D3, KeyModifiers.Control),
-            },
+                .. MoreViewItems(Item),
+            ],
         };
         return new Menu { Background = Look.Bar, ItemsSource = (object[])[file, view, .. MoreMenus(Item)] };
     }
@@ -224,6 +226,7 @@ public sealed partial class MainWindow : Window
         }
         else ShowBatchPanel();
         FillFindings();
+        ShowRules();
         Say("Checked again.");
     }
 

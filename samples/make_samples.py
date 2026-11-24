@@ -161,6 +161,35 @@ def make_envelope_errors():
     return b.text(control=7, wrong={"se_extra": 1, "ge_extra": 1, "iea_off": 1})
 
 
+def make_structure_errors():
+    """Structure problems (layer 2), one a claim."""
+    b = Batch("005010X222A1")
+    header(b, "S")
+    billing(b, 1)
+    # A pointer to a third diagnosis when the claim has one.
+    subscriber(b, 2, 1, "SUN400001", "QUINN", "MARA", "19840822", "F")
+    claim_p(b, "POINTER-01", [("99213", [], 125.00, 1, "20261103", "1:3")], ["I10"])
+    # Lines numbered 1 and 3.
+    subscriber(b, 3, 1, "SUN400002", "DUNN", "OWEN", "19790314", "M")
+    claim_p(b, "LXGAP-02", [("99213", [], 125.00, 1, "20261103", "1"), ("36415", [], 25.00, 1, "20261103", "1")], ["I10"])
+    i = max(k for k, seg in enumerate(b.body) if seg == "LX*2")
+    b.body[i] = "LX*3"
+    # No diagnosis at all.
+    subscriber(b, 4, 1, "SUN400003", "ROWE", "TESS", "19900101", "F")
+    claim_p(b, "NODX-03", [("99213", [], 125.00, 1, "20261103", "1")], ["I10"])
+    i = max(k for k, seg in enumerate(b.body) if seg.startswith("HI*"))
+    del b.body[i]
+    # A subscriber whose HL names a parent that isn't there.
+    subscriber(b, 5, 9, "SUN400004", "VOSS", "IDA", "19660707", "F")
+    claim_p(b, "PARENT-04", [("99213", [], 125.00, 1, "20261103", "1")], ["I10"])
+    # A subscriber with no payer.
+    subscriber(b, 6, 1, "SUN400005", "YATES", "LEO", "19750505", "M")
+    i = max(k for k, seg in enumerate(b.body) if seg.startswith("NM1*PR"))
+    del b.body[i]
+    claim_p(b, "NOPAYER-05", [("99213", [], 125.00, 1, "20261103", "1")], ["I10"])
+    return b.text(control=9)
+
+
 if __name__ == "__main__":
     with open("clinic-837p.x12", "w", newline="") as f:
         f.write(make_837p().text(control=1))
@@ -168,4 +197,6 @@ if __name__ == "__main__":
         f.write(make_837i().text(control=2, group=2))
     with open("envelope-errors.x12", "w", newline="") as f:
         f.write(make_envelope_errors())
+    with open("structure-errors.x12", "w", newline="") as f:
+        f.write(make_structure_errors())
     print("billing NPI", BILLING_NPI, "rendering", RENDER_NPI, "facility", FACILITY_NPI)
