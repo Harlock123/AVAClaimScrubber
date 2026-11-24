@@ -64,7 +64,7 @@ public sealed partial class MainWindow
     {
         if (await PickRulePack() is { } p) AddRulePack(p);
     }
-    private partial ScrubSettings Settings() => new() { Packs = Packs, CodeSets = CodeSets };
+    private partial ScrubSettings Settings() => new() { Packs = Packs, CodeSets = CodeSets, Eligibility = [.. _responses.SelectMany(r => r.File.Eligibility)] };
 
     partial void AfterBuild()
     {

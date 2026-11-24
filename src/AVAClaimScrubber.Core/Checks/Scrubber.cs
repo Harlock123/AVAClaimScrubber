@@ -8,6 +8,9 @@ public sealed class ScrubResult
     public required ClaimBatch Batch { get; init; }
     public required IReadOnlyList<Finding> Findings { get; init; }
 
+    /// <summary>The claims (by number) a payer's 271 answered about, when 271s were open: the eligibility layer checked them.</summary>
+    public IReadOnlySet<int> Answered { get; init; } = new HashSet<int>();
+
     /// <summary>A claim's worst finding's severity, or null when it's clean.</summary>
     public Severity? Status(Claim claim) => Findings.Where(f => f.Claim == claim.Number).Select(f => (Severity?)f.Severity).Max();
 
@@ -16,11 +19,12 @@ public sealed class ScrubResult
     public IEnumerable<Finding> Envelope => Findings.Where(f => f.Claim == 0);
 }
 
-/// <summary>Runs the layers of checks over a batch, in order: envelope and syntax, structure, arithmetic, code sets, edits, payer rules.</summary>
+/// <summary>Runs the layers of checks over a batch, in order: envelope and syntax, structure, arithmetic, code sets, edits, payer rules, eligibility.</summary>
 public static class Scrubber
 {
     public static IReadOnlyList<ICheck> Checks(ScrubSettings? settings = null) =>
-        [new EnvelopeChecks(), new StructureChecks(), new ArithmeticChecks(), new CodeSetChecks(settings?.CodeSets), new EditChecks(settings?.CodeSets), new PayerRuleChecks(settings?.Packs ?? [])];
+        [new EnvelopeChecks(), new StructureChecks(), new ArithmeticChecks(), new CodeSetChecks(settings?.CodeSets), new EditChecks(settings?.CodeSets), new PayerRuleChecks(settings?.Packs ?? []),
+         new EligibilityChecks(settings?.Eligibility ?? [])];
 
     public static ScrubResult Scrub(ClaimBatch batch, ScrubSettings? settings = null)
     {
@@ -28,7 +32,7 @@ public static class Scrubber
         foreach (var check in Checks(settings)) check.Run(context);
         var findings = Overridden(batch, context.Findings, settings?.Packs ?? []);
         var ordered = findings.OrderBy(f => f.Claim).ThenByDescending(f => f.Severity).ThenBy(f => f.Line).ThenBy(f => f.Rule.Id, StringComparer.Ordinal).ToList();
-        return new ScrubResult { Batch = batch, Findings = ordered };
+        return new ScrubResult { Batch = batch, Findings = ordered, Answered = context.Answered };
     }
 
     /// <summary>
@@ -63,6 +67,9 @@ public sealed class ScrubSettings
 
     /// <summary>The code sets loaded (null: none, and layer 4 says so).</summary>
     public CodeSets.CodeSets? CodeSets { get; init; }
+
+    /// <summary>The payers' 271 answers open (layer 7 checks claims against them; none: it checks nothing).</summary>
+    public IReadOnlyList<Eligibility.EligibilityAnswer> Eligibility { get; init; } = [];
 
     /// <summary>The program's settings folder (AVAClaimScrubber under the user's application data).</summary>
     public static string DefaultFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) is { Length: > 0 } d ? d : Path.GetTempPath(), "AVAClaimScrubber");

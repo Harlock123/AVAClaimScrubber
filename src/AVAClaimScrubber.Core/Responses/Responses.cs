@@ -92,31 +92,42 @@ public sealed class ResponseFile
     public List<Ack> Acks { get; } = [];
     public List<ClaimStatus> Statuses { get; } = [];
     public List<RemitClaim> Remits { get; } = [];
+
+    /// <summary>A 271's answers: what the payer said about each person's eligibility (the checks' layer 7 uses them).</summary>
+    public List<Eligibility.EligibilityAnswer> Eligibility { get; } = [];
     public string Payer { get; set; } = "";
     public DateOnly? Date { get; set; }
 
-    public string KindName => Kind switch { "999" => "999 acknowledgment", "277" => "277CA claim acknowledgment", "835" => "835 remittance", _ => Kind };
+    public string KindName => Kind switch { "999" => "999 acknowledgment", "277" => "277CA claim acknowledgment", "835" => "835 remittance", "271" => "271 eligibility answer", _ => Kind };
 
     public string Summary => Kind switch
     {
         "999" => $"{Acks.Count} transaction{(Acks.Count == 1 ? "" : "s")} acknowledged, {Acks.Count(a => a.Rejected)} rejected",
         "277" => $"{Statuses.Count} claim{(Statuses.Count == 1 ? "" : "s")}, {Statuses.Count(s => s.Rejected)} rejected",
+        "271" => $"{Eligibility.Count} {(Eligibility.Count == 1 ? "person" : "people")}: {Eligibility.Count(a => a.Rejection.Length == 0 && a.Active == true)} active, {Eligibility.Count(a => a.Active == false)} not active, {Eligibility.Count(a => a.Rejection.Length > 0)} not found",
         _ => $"{Remits.Count} claim{(Remits.Count == 1 ? "" : "s")}, {Remits.Count(r => r.Denied)} denied, {Remits.Sum(r => r.Lines.Count(l => l.Paid == 0 && l.Adjustments.Any(a => a.Group != "PR")))} lines unpaid, {Remits.Sum(r => r.Paid):0.00} paid",
     };
 }
 
-/// <summary>Reads 999, 277CA and 835 files.</summary>
+/// <summary>Reads 999, 277CA and 835 files, and 271 eligibility answers.</summary>
 public static class ResponseReader
 {
-    public static readonly string[] Kinds = ["999", "277", "835"];
+    public static readonly string[] Kinds = ["999", "277", "835", "271"];
 
     public static ResponseFile? Load(string path) => Read(Path.GetFileName(path), X12File.Load(path));
 
-    /// <summary>The file as a response, or null when its transactions aren't 999, 277 or 835.</summary>
+    /// <summary>The file as a response, or null when its transactions aren't 999, 277, 835 or 271.</summary>
     public static ResponseFile? Read(string name, X12File file)
     {
         if (file.Code is not { } code || !Kinds.Contains(code)) return null;
         var r = new ResponseFile { Name = name, Kind = code, File = file };
+        if (code == "271")
+        {
+            r.Eligibility.AddRange(Eligibility.EligibilityAnswers.Read(file, name));
+            r.Payer = r.Eligibility.FirstOrDefault()?.PayerName ?? "";
+            r.Date = r.Eligibility.FirstOrDefault()?.Made;
+            return r;
+        }
         foreach (var t in file.Transactions.Where(t => t.Code == code))
         {
             var body = t.Body.ToList();

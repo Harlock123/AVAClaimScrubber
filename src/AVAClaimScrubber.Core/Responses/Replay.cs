@@ -57,8 +57,9 @@ public sealed class ReplayReport
 /// <summary>
 /// Denial replay: each denial in an 835 (and each rejection in a 277CA or 999), set against the scrub of the claim it's
 /// about. The reason codes map to the checks that answer to them (CARC 197, prior authorization, to the prior-auth payer
-/// rules; CARC 97, bundled, to NCCI; CARC 16 with RARC M76, an invalid diagnosis, to the diagnosis checks), so the
-/// replay says which denials the scrubber would have stopped, which it missed, and which no check could catch.
+/// rules and the eligibility check V4; CARC 97, bundled, to NCCI; CARC 16 with RARC M76, an invalid diagnosis, to the
+/// diagnosis checks; CARC 27, coverage ended, to V1, which needs the payer's 271), so the replay says which denials the
+/// scrubber would have stopped, which it missed, and which no check could catch.
 /// </summary>
 public static class Replay
 {
@@ -79,11 +80,11 @@ public static class Replay
         ["10"] = new(["N3"], []),
         ["16"] = new(Structural, []),
         ["18"] = new([], [], "a duplicate of a claim already sent: the scrubber sees one batch at a time"),
-        ["22"] = new([], [], "coordination of benefits: the payer's records, not the claim"),
-        ["26"] = new([], [], "coverage dates: eligibility, not the claim"),
-        ["27"] = new([], [], "coverage dates: eligibility, not the claim"),
+        ["22"] = new(["V3"], [], "coordination of benefits: the payer's records"),
+        ["26"] = new(["V1"], [], "coverage dates: eligibility"),
+        ["27"] = new(["V1"], [], "coverage dates: eligibility"),
         ["29"] = new([], ["timely-filing"]),
-        ["31"] = new([], [], "the patient isn't found as insured: eligibility, not the claim"),
+        ["31"] = new(["V2"], [], "the patient isn't found as insured: eligibility"),
         ["49"] = new([], [], "a routine or screening service the plan doesn't cover: benefits"),
         ["50"] = new([], [], "medical necessity: a clinical judgement"),
         ["55"] = new([], [], "experimental treatment: a clinical judgement"),
@@ -103,7 +104,7 @@ public static class Replay
         ["170"] = new([], [], "the provider type: the payer's credentialing records"),
         ["185"] = new([], [], "the rendering provider's eligibility: the payer's credentialing records"),
         ["B7"] = new([], [], "the provider's certification: the payer's records"),
-        ["197"] = new([], ["prior-auth"]),
+        ["197"] = new(["V4"], ["prior-auth"]),
         ["206"] = new(["C7", "S1"], []),
         ["207"] = new(["C7"], []),
         ["208"] = new([], [], "the NPI isn't in the payer's records (the NPPES lookup is off)"),
@@ -139,8 +140,8 @@ public static class Replay
         ["453"] = new(["C5"], []),
         ["562"] = new(["C7"], []),
         ["145"] = new(["C8"], []),
-        ["32"] = new([], [], "the subscriber or policy isn't found: eligibility, not the claim"),
-        ["33"] = new([], [], "the subscriber isn't found: eligibility, not the claim"),
+        ["32"] = new(["V2"], [], "the subscriber or policy isn't found: eligibility"),
+        ["33"] = new(["V2"], [], "the subscriber isn't found: eligibility"),
     };
 
     /// <summary>Adjustments that are how payment works, not denials: contract write-downs, cost sharing, reductions.</summary>
@@ -203,16 +204,28 @@ public static class Replay
                 .Where(f => rules.Contains(f.Rule.Id) || (f.Rule.Kind.Length > 0 && kinds.Contains(f.Rule.Kind)))
                 .Where(f => line == null || f.Line == 0 || f.Line == line.Number)
                 .ToList();
+            // Eligibility reasons are checkable only against the payer's 271 about the patient: with none open for this
+            // claim they're not checkable from the claim; with one open that didn't show it, they're a miss.
+            var eligibility = rules.Count > 0 && rules.All(r => r.StartsWith('V'));
+            var answered = result.Answered.Contains(claim.Number);
+            // The eligibility checks only ran when a 271 answered about this claim.
+            var ran = rules.Where(r => !r.StartsWith('V') || answered).ToList();
+            var waiting = rules.Where(r => r.StartsWith('V') && !answered).ToList();
             var (verdict, why) = caught.Count > 0
                 ? (Verdict.Caught, "Caught by " + string.Join(", ", caught.Select(f => f.Rule.Id).Distinct()) + ": " + caught[0].Message)
+                : eligibility && !answered && notCheckable != null
+                    ? (Verdict.NotCheckable, "Not checkable from a claim: " + notCheckable + "; open the payer's 271 about this patient to check it.")
+                : eligibility && answered
+                    ? (Verdict.Missed, $"Missed: the payer's 271 about this patient didn't show it ({string.Join(", ", rules)} found nothing); the answer may be older than the service.")
                 : notCheckable != null
                     ? (Verdict.NotCheckable, "Not checkable from a claim: " + notCheckable + ".")
                     : rules.Count == 0 && kinds.Count == 0
                         ? (Verdict.NotCheckable, "No check answers to this reason.")
                         : (Verdict.Missed, "Missed: " + string.Join("; ", new[]
                         {
-                            rules.Count > 0 ? $"checks {string.Join(", ", rules.Take(6))}{(rules.Count > 6 ? "…" : "")} found nothing" : null,
+                            ran.Count > 0 ? $"checks {string.Join(", ", ran.Take(6))}{(ran.Count > 6 ? "…" : "")} found nothing" : null,
                             kinds.Count > 0 ? $"a payer rule ({string.Join(", ", kinds)}) would catch it" : null,
+                            waiting.Count > 0 ? $"with the payer's 271 about this patient open, {string.Join(", ", waiting)} would check it" : null,
                         }.Where(x => x != null)) + "." + Unloaded(rules, sets));
             rows.Add(new ReplayRow { Denial = d, Result = result, Claim = claim, Rules = rules, Kinds = kinds, CaughtBy = caught, Verdict = verdict, Explanation = why });
         }

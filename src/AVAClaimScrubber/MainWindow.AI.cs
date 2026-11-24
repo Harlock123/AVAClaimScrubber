@@ -101,14 +101,19 @@ public sealed partial class MainWindow
         var full = Path.GetFullPath(path);
         Open(full);
         if (_open.All(o => o.Path != full) && _responses.All(r => r.Path != full))
-            throw new NotSupportedException(txtStatusBar.Text is { Length: > 0 } said ? said : $"{Path.GetFileName(full)} isn't an 837, 999, 277CA or 835.");
+            throw new NotSupportedException(txtStatusBar.Text is { Length: > 0 } said ? said : $"{Path.GetFileName(full)} isn't an 837, 999, 277CA, 835 or 271.");
     }
 
     /// <summary>Closes an open file or response for an agent.</summary>
     internal void CloseForAgent(string path)
     {
         var full = Path.GetFullPath(path);
-        if (_responses.RemoveAll(r => r.Path == full) > 0) ShowResponses();
+        var answers = _responses.Any(r => r.Path == full && r.File.Kind == "271");
+        if (_responses.RemoveAll(r => r.Path == full) > 0)
+        {
+            if (answers) Recheck();
+            ShowResponses();
+        }
         if (_open.FirstOrDefault(o => o.Path == full) is { } o)
         {
             _open.Remove(o);

@@ -79,6 +79,30 @@ public sealed class Screenshots
     });
 
     [Fact]
+    public void Eligibility() => HeadlessApp.Run(() =>
+    {
+        if (Environment.GetEnvironmentVariable("CLAIMS_SHOTS") is not { Length: > 0 } dir) return;
+        Directory.CreateDirectory(dir);
+        var root = Samples.Copy();
+        var w = new MainWindow(new[] { "coding-errors.x12", "edits-837p.x12", "payer-837p.x12" }.Select(f => Path.Combine(root, f))) { Width = 1500, Height = 900 };
+        w.AgentSettings.ChatOpen = false;
+        w.Show();
+        try
+        {
+            w.AddRulePack(Path.Combine(root, "rules", "sunplan.json"));
+            w.Open(Path.Combine(root, "responses", "sunplan-835.x12"));
+            w.Open(Path.Combine(root, "responses", "sunplan-271.x12"));
+            w.Tabs.SelectedIndex = 5;
+            Save(w, Path.Combine(dir, "eligibility.png"));
+            var payer = w.OpenFiles.Single(f => f.Name == "payer-837p.x12");
+            w.ShowClaim(payer, payer.Batch.Claims[4]);
+            w.Tabs.SelectedIndex = 1;
+            Save(w, Path.Combine(dir, "eligibility-claim.png"));
+        }
+        finally { w.Close(); }
+    });
+
+    [Fact]
     public void Ai_chat() => HeadlessApp.Run(() =>
     {
         if (Environment.GetEnvironmentVariable("CLAIMS_SHOTS") is not { Length: > 0 } dir) return;

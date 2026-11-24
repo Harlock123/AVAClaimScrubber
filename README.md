@@ -3,13 +3,14 @@
 Catch a claim's problems before the payer does. AVA Claim Scrubber checks HIPAA **837P** (professional) and **837I**
 (institutional) 5010 claims the way a clearinghouse and a payer would, before they're sent: the envelope's counts and
 control numbers, the loop structure, the arithmetic and dates, every code against the real code sets (ICD-10-CM, HCPCS,
-CPT's shape, modifiers, places of service, NPIs, taxonomies), Medicare's NCCI and MUE edits, and the payer's own rules.
+CPT's shape, modifiers, places of service, NPIs, taxonomies), Medicare's NCCI and MUE edits, the payer's own rules, and,
+with the payer's **271** eligibility answers open, each patient's coverage.
 Each finding says what's wrong, where (the claim, line, loop and element, such as `2400 SV1-04`), why (the rule and
 its source) and, when the fix is clear, the fix, which it can make for you in a corrected copy.
 
 Then it closes the loop: open the payer's **999**, **277CA** or **835** beside the claims and it **replays every denial**
-against the findings: which a check caught, which it missed, and which no check could catch (eligibility, medical
-necessity). Missed denials a payer rule would have caught become a **drafted rule pack** for you to check and add.
+against the findings: which a check caught, which it missed, and which no check could catch (medical necessity, an
+attachment). With the payer's 271 open too, eligibility denials are checked as well. Missed denials a payer rule would have caught become a **drafted rule pack** for you to check and add.
 
 It has an **AI Chat** (F12) and an **MCP server**, so Claude or a model on your own computer can explain a batch's
 problems, look up a code or a denial, or draft payer rules. **Agents see de-identified claims** unless you say
@@ -25,7 +26,7 @@ Builds for Windows, macOS and Linux (Intel/AMD and ARM) are on the
 
 ## What it checks
 
-Six layers, each rule with an id, a reason and a source. Severities say what would happen to the claim: **reject** (a
+Seven layers, each rule with an id, a reason and a source. Severities say what would happen to the claim: **reject** (a
 clearinghouse or payer won't take it), **deny** (it'll be taken and not paid), **warn** and **info**. A claim's status is
 its worst finding.
 
@@ -37,6 +38,7 @@ its worst finding.
 | 4 Code sets | C1–C9 | ICD-10-CM codes exist and are billable (a header such as E11 names billable codes under it); HCPCS codes were in effect on the service date; CPT codes have CPT's shape; modifiers exist; places of service are CMS's; every NPI passes its check digit; taxonomies are NUCC's |
 | 5 Medicare's edits | N1–N4 | NCCI procedure-to-procedure pairs (with the modifiers that let a pair through); medically unlikely edits, per line or per day; diagnoses that don't fit the patient's sex or age, by ICD-10-CM chapter |
 | 6 Payer rules | from rule packs | Filing limits, prior authorization, a modifier a place of service needs (telehealth 95), unit limits, procedures a payer doesn't cover |
+| 7 Eligibility | V1–V4 | With the payer's 271 answers open: coverage active on the dates of service; the payer has the member on file; another payer isn't primary when the claim is billed as primary; care the 271 says needs authorization carries the authorization number (REF*G1) |
 
 Dates are checked as of the batch's creation (BHT04), so a file checks the same whenever it's opened.
 
@@ -106,7 +108,9 @@ the claim's findings:
 - **Caught**: a check flagged it for the payer's reason (CARC 97, bundled, against the NCCI check; a 277CA's "claim is
   out of balance" against the total check).
 - **Missed**: a check or a payer rule could have, and didn't. When a code set it needs isn't loaded, it says so.
-- **Not checkable**: nothing in a claim shows it (the patient isn't insured, medical necessity, an attachment needed).
+- **Not checkable**: nothing in a claim shows it (medical necessity, an attachment needed). Eligibility reasons (the
+  patient isn't found, coverage dates, another payer primary) are checkable only against the payer's 271 about the
+  patient: without one open they're not checkable, and say so; with one open, they're caught or missed like the rest.
 - **No claim**: the claim isn't open.
 
 Reason codes are explained in X12's own words (the CARC, RARC and claim status code lists from x12.org). **Draft Rule
@@ -116,6 +120,24 @@ unit limits from the units paid. Each rule's `why` says what it was drafted from
 against the payer's policy and add; it's never used by itself.
 
 ![A remittance replayed: three Sun Plan denials caught by its pack's rules, a bundled J1100 missed because the NCCI edits aren't loaded, an MUE and a sex conflict caught, and two eligibility denials that no check could catch](Screenshots/responses.png)
+
+### Eligibility: the payer's 271
+
+Open the payer's **271** eligibility answers (File › Open) beside the claims, and they're checked against them (layer 7).
+Each claim is matched to the answer about its patient, by payer, member ID and name, and the eligibility layer says:
+
+- **V1**: coverage isn't active, or ends before (or begins after) a line's date of service;
+- **V2**: the payer couldn't find the member, with its AAA reason;
+- **V3**: the 271 names another payer as primary, and the claim is billed here as primary;
+- **V4**: the 271 says a kind of care needs authorization, and the claim has no authorization number.
+
+The replay then catches eligibility denials too: CARC 31 by V2, 26 and 27 by V1, 22 by V3, 197 by V4. With the
+sample's 271 open beside the Sun Plan pack, all eight of the remittance's denials are caught.
+[AVA Eligibility](https://github.com/Harlock123/AVAEligibility) asks for the 271s and reads them in full.
+
+![The remittance replayed with Sun Plan's 271 open: every denial caught, the patient the payer couldn't find by V2 and the missing therapy authorization by V4](Screenshots/eligibility.png)
+
+![A claim billed as primary while the 271 says Medicare Part B is primary: V3, on SBR01](Screenshots/eligibility-claim.png)
 
 **File › Export Report…** writes the lot (every file's claims and findings, the rules behind them, and the replays) as an
 HTML page or an Excel workbook. Reports list claims by account number: handle them as you handle the claims.
@@ -186,14 +208,15 @@ AVAClaimScrubber --deidentify INPUT OUTPUT          # de-identified copies of a 
 `samples/` has invented claims, made by `make_samples.py`, each clean or with one planted problem named in its account
 number (`TOTAL-02`, `HEADER-02`, `NCCI-03`…): `clinic-837p.x12`, `hospital-837i.x12`, `envelope-errors.x12`,
 `structure-errors.x12`, `coding-errors.x12`, `edits-837p.x12` and `payer-837p.x12`; `responses/` has two 999s, a 277CA
-and an 835 that answer them; `rules/sunplan.json` an invented payer's pack. Every patient, member, provider, NPI and
+and an 835 that answer them, and Sun Plan's 271 eligibility answers for five of the patients; `rules/sunplan.json` an invented payer's pack. Every patient, member, provider, NPI and
 tax ID is made up.
 
 ## What it isn't
 
 It isn't a certified edit engine. The age and sex checks work by ICD-10-CM chapter, as the Medicare Code Editor's
 categories do, not from its full tables; NCCI and CPT need files you're licensed for; payer rules are what your packs
-say. It doesn't check eligibility or look NPIs up in NPPES. Use it to stop the avoidable rejections and denials, not
+say. It checks eligibility only against 271s you open (it doesn't ask payers itself: AVA Eligibility does), and it
+doesn't look NPIs up in NPPES. Use it to stop the avoidable rejections and denials, not
 as the last word on a claim.
 
 ## Building

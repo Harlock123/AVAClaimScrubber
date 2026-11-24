@@ -359,6 +359,37 @@ def make_sunplan_835():
     return envelope("835", "005010X221A1", 24, body, functional="HP", date="20261120")
 
 
+def make_sunplan_271():
+    """Sun Plan's 271 answers to the clinic's eligibility questions of 1 November, for five of the patients it later
+    billed: one it can't find (the CARC 31 denial), therapy needing authorization (twice: one claim has the number),
+    coverage that ended in October, and Medicare primary. The eligibility checks (V1 to V4) read it."""
+    people = [
+        ("MORENO", "ALICE", "SUN500000", "19800415", "F", "not-found"),
+        ("PRICE", "JO", "SUN700001", "19750322", "M", "therapy-auth"),
+        ("PRICE", "JO", "SUN700002", "19750322", "M", "therapy-auth"),
+        ("HALE", "SAM", "SUN600004", "19620909", "M", "ended"),
+        ("PRICE", "JO", "SUN700004", "19750322", "M", "medicare-primary"),
+    ]
+    body = ["BHT*0022*11*SUN271R0001*20261101*0900",
+            "HL*1**20*1", "NM1*PR*2*SUNPLAN*****PI*SUN01",
+            "HL*2*1*21*1", f"NM1*1P*2*RIVERBEND FAMILY CLINIC*****XX*{BILLING_NPI}"]
+    for i, (last, first, member, dob, sex, case) in enumerate(people, 1):
+        body += [f"HL*{i + 2}*2*22*0", f"TRN*2*RFC{i:04d}*9RIVERBEND", f"NM1*IL*1*{last}*{first}****MI*{member}"]
+        if case == "not-found":
+            body += ["AAA*N**75*C"]
+            continue
+        body += [f"DMG*D8*{dob}*{sex}"]
+        if case == "ended":
+            body += ["DTP*346*D8*20250101", "DTP*347*D8*20261031", "EB*6*IND*30*PR*SUN PLAN SILVER", "MSG*COVERAGE TERMINATED 10/31/2026"]
+            continue
+        body += ["DTP*346*D8*20260101", "EB*1*IND*30*PR*SUN PLAN SILVER", "EB*B*IND*98*PR**27*20*****Y"]
+        if case == "therapy-auth":
+            body += ["EB*1*IND*MH*PR*******Y*Y", "MSG*OUTPATIENT PSYCHOTHERAPY REQUIRES PRIOR AUTHORIZATION"]
+        if case == "medicare-primary":
+            body += ["EB*R**30*MB", "LS*2120", "NM1*PRP*2*MEDICARE PART B*****PI*MCRB1", "LE*2120"]
+    return envelope("271", "005010X279A1", 25, body, functional="HB", date="20261101")
+
+
 if __name__ == "__main__":
     with open("clinic-837p.x12", "w", newline="") as f:
         f.write(make_837p().text(control=1))
@@ -381,7 +412,8 @@ if __name__ == "__main__":
     with open("envelope-errors.x12") as f:
         env = f.read()
     for name, text in [("structure-999.x12", make_structure_999(structure)), ("envelope-999.x12", make_envelope_999(env)),
-                       ("clinic-277ca.x12", make_clinic_277ca()), ("sunplan-835.x12", make_sunplan_835())]:
+                       ("clinic-277ca.x12", make_clinic_277ca()), ("sunplan-835.x12", make_sunplan_835()),
+                       ("sunplan-271.x12", make_sunplan_271())]:
         with open(os.path.join("responses", name), "w", newline="") as f:
             f.write(text)
     print("billing NPI", BILLING_NPI, "rendering", RENDER_NPI, "facility", FACILITY_NPI)

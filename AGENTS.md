@@ -7,8 +7,8 @@ how the code is put together and the rules that keep it working.
 
 An 837 claim scrubber in C# on .NET 10 and Avalonia 11.3: it reads 837P and 837I (5010) files into their loops and
 claims, checks them in layers (envelope and syntax, structure, arithmetic and dates, code sets, NCCI and MUE edits,
-payer rules), and says what's wrong, where, why and how to fix it. It reads 999, 277CA and 835 responses and replays
-their denials against the findings. It has an AI Chat (F12) and an MCP server (in the open window with `--mcp
+payer rules, and eligibility against the payer's 271s when they're open), and says what's wrong, where, why and how to
+fix it. It reads 999, 277CA and 835 responses and replays their denials against the findings. It has an AI Chat (F12) and an MCP server (in the open window with `--mcp
 --attach`, headless with `--mcp`, over the network with `--http`, port 8777). Agents see de-identified values unless
 the person allows otherwise; the checks always run on the real files.
 
@@ -43,13 +43,17 @@ CLAIMS_LIVE_SERVER=http://localhost:11434 CLAIMS_LIVE_MODEL=qwen3:1.7b dotnet te
     (layer 3: A rules), `RulePack` (JSON packs: overrides per payer, and payer rules), `Scrubber` (runs the layers,
     then applies the packs' overrides). `CodeSetChecks` (layer 4: C rules), `EditChecks` (layer 5: N rules: NCCI PTP,
     MUE, age and sex by ICD-10-CM chapter), `PayerRuleChecks` (layer 6: the packs' rules, ids P-pack-id; kinds
-    timely-filing, prior-auth, require-modifier, max-units, not-covered), `Corrector` (a corrected copy: the fixes, and
+    timely-filing, prior-auth, require-modifier, max-units, not-covered), `EligibilityChecks` (layer 7: V1 to V4,
+    against the payers' 271 answers in `ScrubSettings.Eligibility`; none open, it checks nothing; it records the claims
+    answered about in `ScrubResult.Answered`), `Corrector` (a corrected copy: the fixes, and
     nothing else, in a new file).
   - `Responses/`: `ResponseCodes` (CARC, RARC and 277 status codes, worded as x12.org publishes them; only the ones
-    used), `Responses` (`ResponseReader`: 999 → `Ack`, 277CA → `ClaimStatus`, 835 → `RemitClaim`; IK4-04, the bad value
-    as sent, is never kept), `Replay` (each denial or rejection matched to its claim by CLM01, a 999's by control
+    used), `Responses` (`ResponseReader`: 999 → `Ack`, 277CA → `ClaimStatus`, 835 → `RemitClaim`, 271 →
+    `Eligibility.EligibilityAnswer`; IK4-04, the bad value as sent, is never kept), `Replay` (each denial or rejection matched to its claim by CLM01, a 999's by control
     numbers and segment position; reason codes mapped to the checks that answer to them; verdicts Caught, Missed,
     NotCheckable, NoClaim; `Draft` writes a rule pack from the missed denials a payer rule would catch).
+  - `Eligibility/`: `EligibilityAnswer` (a 271's people, as far as the V rules need them, and the one about a claim),
+    `EligibilityCodes` and `ServiceTypes` (AVAEligibility's lists, copied).
   - `Reports/Report.cs`: the HTML page and the Excel workbook (ClosedXML).
   - `CodeSets/`: `CodeSets` (ICD-10-CM, HCPCS Level II and modifiers, NUCC taxonomy, licensed CPT: parsers for each
     publisher's file layout, and a store in the settings folder with a manifest of where each came from),
@@ -95,8 +99,13 @@ CLAIMS_LIVE_SERVER=http://localhost:11434 CLAIMS_LIVE_MODEL=qwen3:1.7b dotnet te
   the repository. `CLAIMS_LIVE_DOWNLOADS=1 dotnet test` checks the real downloads still work.
 - **A reason code maps to checks, and the map is the claim.** `Replay.Carc`, `Rarc`, `Status` and the 999 maps say which
   rules answer to which codes; a new rule that answers to a denial goes into them, with a planted denial in
-  `samples/responses` and a line in `ReplayTests`. Codes that nothing in a claim can show (eligibility, medical
-  necessity) are `NotCheckable`, with the reason: never call those misses.
+  `samples/responses` and a line in `ReplayTests`. Codes that nothing in a claim can show (medical necessity) are
+  `NotCheckable`, with the reason: never call those misses. Eligibility codes (CARC 22, 26, 27, 31, 197's V4; 277CA
+  status 32, 33) map to the V rules: not checkable when no 271 answered about the claim, missed when one did and showed
+  nothing.
+- **Eligibility comes from AVAEligibility.** `Eligibility/EligibilityCodes.cs` and `Eligibility/ServiceTypes.cs` are
+  copies of its lists (~/RiderProjects/AVAEligibility): fix them together. `EligibilityAnswer` reads only what the V
+  rules need; AVAEligibility reads a 271 in full.
 - **Drafted rules are drafts.** `Replay.Draft` saves a pack with `"draft": true` and each rule's evidence in its "why";
   the window saves it to a file and never adds it: a person checks it against the payer's policy first.
 - **Agents read the de-identified copy; the checks read the real file.** De-identifying moves dates but not BHT04, so

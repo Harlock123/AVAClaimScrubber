@@ -155,6 +155,16 @@ public sealed class ResponseWindowTests
         using var book = new ClosedXML.Excel.XLWorkbook(Path.Combine(root, "report.xlsx"));
         Assert.Equal(["Summary", "Claims", "Findings", "Rules", "Denials"], book.Worksheets.Select(s => s.Name));
         Assert.Equal(9, book.Worksheet("Denials").RowsUsed().Count());
+
+        // The payer's 271 opened too: the claims are checked against it, and the eligibility denials are caught.
+        w.Open(Path.Combine(root, "responses", "sunplan-271.x12"));
+        HeadlessApp.Settle();
+        Assert.StartsWith("Read sunplan-271.x12 (271 eligibility answer): 5 people: 3 active, 1 not active, 1 not found.", w.txtStatusBar.Text);
+        Assert.Equal(0, w.Replays.Single(r => r.Response.Kind == "835").Count(Core.Responses.Verdict.NotCheckable));
+        text = string.Join("\n", w.ResponsesPanel.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+        Assert.Contains("Caught by V2", text);
+        Assert.Contains("The open claims are checked against its answers (layer 7): 5 claims answered about.", text);
+        Assert.Contains(w.OpenFiles.SelectMany(o => o.Result.Findings), f => f.Rule.Id == "V3");
         w.Close();
     });
 }

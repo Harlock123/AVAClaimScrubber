@@ -184,23 +184,38 @@ public sealed class HeadlessSession(bool seeRealValues = false, ScrubSettings? s
 
     public IReadOnlyList<OpenResponse> Responses => _responses;
 
-    public ScrubSettings Settings { get; } = settings ?? new ScrubSettings();
+    private readonly ScrubSettings _base = settings ?? new ScrubSettings();
+
+    /// <summary>The packs and code sets given, with the open 271s' answers (the eligibility layer's input).</summary>
+    public ScrubSettings Settings => new() { Packs = _base.Packs, CodeSets = _base.CodeSets, Eligibility = [.. _base.Eligibility, .. _responses.SelectMany(r => r.File.Eligibility)] };
 
     public void Open(string path)
     {
         var full = Path.GetFullPath(path);
         var file = X12File.Load(full);
         Close(full);
-        if (ResponseReader.Read(Path.GetFileName(full), file) is { } response) _responses.Add(new OpenResponse(full, response));
+        if (ResponseReader.Read(Path.GetFileName(full), file) is { } response)
+        {
+            _responses.Add(new OpenResponse(full, response));
+            if (response.Kind == "271") Recheck();
+        }
         else if (file.Transactions.Any(t => t.Code == "837")) _files.Add(new OpenFile(full, Scrubber.Scrub(ClaimReader.Read(Path.GetFileName(full), file), Settings)));
-        else throw new NotSupportedException($"{Path.GetFileName(full)} isn't an 837, 999, 277CA or 835" + (file.Code is { } c ? $" (its transactions are {c}s)." : " (it has no ST segment)."));
+        else throw new NotSupportedException($"{Path.GetFileName(full)} isn't an 837, 999, 277CA, 835 or 271" + (file.Code is { } c ? $" (its transactions are {c}s)." : " (it has no ST segment)."));
     }
 
     public void Close(string path)
     {
         var full = Path.GetFullPath(path);
         _files.RemoveAll(f => f.Path == full);
+        if (_responses.RemoveAll(r => r.Path == full && r.File.Kind == "271") > 0) Recheck();
         _responses.RemoveAll(r => r.Path == full);
+    }
+
+    /// <summary>Checks the open 837s again (the 271s open changed).</summary>
+    private void Recheck()
+    {
+        for (var i = 0; i < _files.Count; i++)
+            _files[i] = new OpenFile(_files[i].Path, Scrubber.Scrub(ClaimReader.Load(_files[i].Path), Settings));
     }
 
     public void Show(ViewState view) => View = view;

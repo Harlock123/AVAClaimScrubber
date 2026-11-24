@@ -19,7 +19,7 @@ public enum Severity
 
 /// <summary>
 /// A rule a check applies: its id (the layer's letter and a number: E envelope, S syntax, L loops, A arithmetic and
-/// dates, C code sets, N NCCI and MUE, P payer), what it checks, why it matters, where it comes from, and how bad
+/// dates, C code sets, N NCCI and MUE, P payer, V eligibility), what it checks, why it matters, where it comes from, and how bad
 /// breaking it is.
 /// </summary>
 public sealed record Rule(string Id, int Layer, string Title, string Why, string Source, Severity Severity, string Kind = "");
@@ -61,6 +61,9 @@ public sealed class ScrubContext
 {
     public required ClaimBatch Batch { get; init; }
     public List<Finding> Findings { get; } = [];
+
+    /// <summary>The claims a payer's 271 answered about (the eligibility layer adds them).</summary>
+    public HashSet<int> Answered { get; } = [];
     public char Component => Batch.File.Delimiters.Component;
 
     public void Add(Rule rule, string message, Claim? claim = null, ServiceLine? line = null, Segment? segment = null, string element = "", Fix? fix = null, string? loop = null) =>

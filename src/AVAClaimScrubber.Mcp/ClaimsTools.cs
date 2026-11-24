@@ -58,7 +58,7 @@ public sealed partial class ClaimsTools(IExplorerHost host)
             return f.Code switch
             {
                 "837" => f.Transactions.FirstOrDefault()?.Start[3].Trim() is { } v && v.Contains("X223", StringComparison.Ordinal) ? "837I claims" : "837P claims",
-                "999" => "999 acknowledgment", "277" => "277CA claim acknowledgment", "835" => "835 remittance", null => "X12 (no transactions)", var c => c,
+                "999" => "999 acknowledgment", "277" => "277CA claim acknowledgment", "835" => "835 remittance", "271" => "271 eligibility answer", null => "X12 (no transactions)", var c => c,
             };
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException)
@@ -461,7 +461,7 @@ public sealed partial class ClaimsTools(IExplorerHost host)
     // ───────────────────────────── responses ─────────────────────────────
 
     [McpServerTool(Name = "get_response", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
-    [Description("An open 999, 277CA or 835 in full: a 999's answer for each transaction and its errors; a 277CA's status for each claim; an 835's payment for each claim, its lines, adjustments (group, CARC, amount) and remarks (RARCs), each code with X12's words.")]
+    [Description("An open 999, 277CA, 835 or 271 in full: a 999's answer for each transaction and its errors; a 277CA's status for each claim; an 835's payment for each claim, its lines, adjustments (group, CARC, amount) and remarks (RARCs), each code with X12's words; a 271's answer about each person (found or not, coverage, another payer primary, care needing authorization), which the eligibility checks (V1 to V4) use.")]
     public Task<string> GetResponse(
         [Description("The open response: its name or path. Optional when one is open.")] string? file = null,
         CancellationToken cancel = default) =>
@@ -480,6 +480,15 @@ public sealed partial class ClaimsTools(IExplorerHost host)
                 {
                     ["account"] = c.Account, ["payer_claim"] = c.PayerClaim, ["rejected"] = c.Rejected, ["statuses"] = new JsonArray([.. c.Statuses.Select(x => (JsonNode)x.Text)]),
                     ["lines"] = c.Lines.Count == 0 ? null : new JsonArray([.. c.Lines.Select(l => (JsonNode)new JsonObject { ["procedure"] = l.Procedure, ["statuses"] = new JsonArray([.. l.Statuses.Select(x => (JsonNode)x.Text)]) })]),
+                })]);
+            else if (r.Kind == "271")
+                o["people"] = new JsonArray([.. r.Eligibility.Take(MaxResults).Select(a => (JsonNode)new JsonObject
+                {
+                    ["member"] = a.MemberId.Length > 0 ? a.MemberId : a.SubscriberId, ["name"] = $"{a.Last}, {a.First}", ["dependent"] = a.Dependent ? true : null,
+                    ["found"] = a.Rejection.Length == 0, ["not_found"] = a.Rejection.Length > 0 ? $"AAA {a.Rejection} {Core.Eligibility.EligibilityCodes.Say(Core.Eligibility.EligibilityCodes.Reject, a.Rejection)}" : null,
+                    ["active"] = a.Active, ["begins"] = a.Begins?.ToString("yyyy-MM-dd"), ["ends"] = a.Ends?.ToString("yyyy-MM-dd"),
+                    ["primary_elsewhere"] = a.PrimaryElsewhere.Length > 0 ? a.PrimaryElsewhere : null,
+                    ["needs_authorization"] = a.NeedsAuthorization.Count > 0 ? new JsonArray([.. a.NeedsAuthorization.Select(t => (JsonNode)$"{t} {Core.Eligibility.EligibilityCodes.Say(Core.Eligibility.EligibilityCodes.ServiceType, t)}")]) : null,
                 })]);
             else
                 o["claims"] = new JsonArray([.. r.Remits.Take(MaxResults).Select(c => (JsonNode)new JsonObject
@@ -706,7 +715,7 @@ public sealed partial class ClaimsTools(IExplorerHost host)
 
     /// <summary>A replay as the agent may see it: the de-identified response against the de-identified claims, with the findings of the real ones.</summary>
     private ReplayReport LensReplay(IExplorerSession s, OpenResponse r) =>
-        Replay.Run(LensResponse(s, r), [.. s.Files.Select(f => new ScrubResult { Batch = Lensed(s, f).Batch, Findings = f.Result.Findings })], s.Settings.CodeSets);
+        Replay.Run(LensResponse(s, r), [.. s.Files.Select(f => new ScrubResult { Batch = Lensed(s, f).Batch, Findings = f.Result.Findings, Answered = f.Result.Answered })], s.Settings.CodeSets);
 
     private static bool Matches(string path, string name)
     {

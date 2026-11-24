@@ -136,6 +136,7 @@ public sealed partial class MainWindow
         4 => "4  Code sets",
         5 => "5  NCCI and MUE edits",
         6 => "6  Payer rules",
+        7 => "7  Eligibility (the payers' 271s)",
         _ => layer.ToString(CultureInfo.InvariantCulture),
     };
 }

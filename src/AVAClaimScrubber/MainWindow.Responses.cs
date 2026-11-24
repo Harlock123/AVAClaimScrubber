@@ -27,8 +27,16 @@ public sealed partial class MainWindow
         if (ResponseReader.Read(Path.GetFileName(path), batch.File) is not { } response) return;
         _responses.RemoveAll(r => r.Path == path);
         _responses.Add((path, response));
+        // A 271's answers are checks' input (layer 7): the open claims are checked again with them.
+        if (response.Kind == "271") Recheck();
         ShowResponses();
         Tabs.SelectedIndex = 5;
+        if (response.Kind == "271")
+        {
+            var answered = _open.Sum(o => o.Result.Answered.Count);
+            Say($"Read {response.Name} ({response.KindName}): {response.Summary}. The open claims are checked against it: {answered} answered about.");
+            return;
+        }
         var replay = Replays.First(r => r.Response == response);
         Say($"Read {response.Name} ({response.KindName}): {response.Summary}. {replay.Summary}");
     }
@@ -47,7 +55,8 @@ public sealed partial class MainWindow
             ResponsesPanel.Children.Add(new TextBlock
             {
                 Text = "Open a payer's 999, 277CA or 835 (File › Open) beside the claims it answers. Each denial or rejection is matched to its claim " +
-                       "(by CLM01; a 999 by its control numbers) and set against the findings: caught by a check, missed, or not checkable from a claim.",
+                       "(by CLM01; a 999 by its control numbers) and set against the findings: caught by a check, missed, or not checkable from a claim. " +
+                       "Open the payer's 271 eligibility answers too, and the claims are checked against them (layer 7), so eligibility denials can be caught.",
                 TextWrapping = TextWrapping.Wrap, Foreground = Look.Dim, FontSize = 12.5, MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Left,
             });
             return;
@@ -56,7 +65,8 @@ public sealed partial class MainWindow
         {
             var head = new WrapPanel { Margin = new Thickness(0, 14, 0, 2) };
             head.Children.Add(new TextBlock { Text = rep.Response.Name, FontSize = 16, FontWeight = FontWeight.SemiBold, Foreground = Look.Text, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center });
-            if (Replay.Draft(rep) != null)
+            var answers = rep.Response.Kind == "271";
+            if (!answers && Replay.Draft(rep) != null)
             {
                 var draft = new Button { Content = "Draft Rule Pack…", Margin = new Thickness(0, 0, 8, 0) };
                 var r = rep;
@@ -65,10 +75,21 @@ public sealed partial class MainWindow
             }
             var remove = new Button { Content = "Close" };
             var path = _responses.First(x => x.File == rep.Response).Path;
-            remove.Click += (_, _) => { _responses.RemoveAll(x => x.Path == path); ShowResponses(); };
+            remove.Click += (_, _) =>
+            {
+                _responses.RemoveAll(x => x.Path == path);
+                if (answers) Recheck();
+                ShowResponses();
+            };
             head.Children.Add(remove);
             ResponsesPanel.Children.Add(head);
             ResponsesPanel.Children.Add(new TextBlock { Text = $"{rep.Response.KindName}{(rep.Response.Payer.Length > 0 ? " from " + rep.Response.Payer : "")}: {rep.Response.Summary}.", Foreground = Look.Dim, FontSize = 12.5 });
+            if (answers)
+            {
+                var checkedNow = _open.Sum(o => o.Result.Answered.Count);
+                ResponsesPanel.Children.Add(new TextBlock { Text = $"The open claims are checked against its answers (layer 7): {checkedNow} claim{(checkedNow == 1 ? "" : "s")} answered about.", Foreground = Look.Clean, FontSize = 12.5, TextWrapping = TextWrapping.Wrap });
+                continue;
+            }
             ResponsesPanel.Children.Add(new TextBlock { Text = rep.Summary, Foreground = rep.Count(Verdict.Missed) > 0 ? Look.Deny : Look.Clean, FontSize = 12.5, TextWrapping = TextWrapping.Wrap });
             foreach (var row in rep.Rows) ResponsesPanel.Children.Add(RowView(row));
         }

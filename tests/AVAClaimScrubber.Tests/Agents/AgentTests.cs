@@ -115,7 +115,7 @@ public sealed class AgentTests
 
     /// <summary>The 837 and response samples.</summary>
     internal static readonly string[] Claims = ["clinic-837p.x12", "hospital-837i.x12", "envelope-errors.x12", "structure-errors.x12", "coding-errors.x12", "edits-837p.x12", "payer-837p.x12"];
-    internal static readonly string[] Responses = ["responses/structure-999.x12", "responses/envelope-999.x12", "responses/clinic-277ca.x12", "responses/sunplan-835.x12"];
+    internal static readonly string[] Responses = ["responses/structure-999.x12", "responses/envelope-999.x12", "responses/clinic-277ca.x12", "responses/sunplan-835.x12", "responses/sunplan-271.x12"];
 
     // ───────────────────────────── the tools ─────────────────────────────
 
