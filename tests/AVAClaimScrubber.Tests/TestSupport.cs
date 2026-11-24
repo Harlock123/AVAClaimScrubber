@@ -44,5 +44,7 @@ internal static class SettingsIsolation
         File.Copy(Samples.DataPath("icd10cm_order_extract.txt"), Path.Combine(codes, "icd10cm.txt"));
         File.Copy(Samples.DataPath("hcpcs_extract.txt"), Path.Combine(codes, "hcpcs.txt"));
         File.Copy(Samples.DataPath("taxonomy_extract.csv"), Path.Combine(codes, "taxonomy.csv"));
+        File.Copy(Samples.DataPath("mue_practitioner_extract.csv"), Path.Combine(codes, "mue-practitioner.csv"));
+        File.Copy(Samples.DataPath("ncci_ptp_invented.txt"), Path.Combine(codes, "ncci-ptp-1.txt"));
     }
 }

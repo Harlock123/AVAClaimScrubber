@@ -7,5 +7,12 @@
   "overrides": {
     "A4": { "severity": "warn", "why": "Sun Plan pays a line dated outside the statement period, with a remark." }
   },
-  "rules": []
+  "rules": [
+    { "id": "timely", "kind": "timely-filing", "days": 90,
+      "why": "Sun Plan denies claims received more than 90 days after the service (CARC 29)." },
+    { "id": "auth", "kind": "prior-auth", "procedures": ["90837"],
+      "why": "Sun Plan needs prior authorization for 60-minute psychotherapy (CARC 197 without it)." },
+    { "id": "telehealth", "kind": "require-modifier", "places": ["02", "10"], "modifier": "95",
+      "why": "Sun Plan pays telehealth visits only with modifier 95." }
+  ]
 }

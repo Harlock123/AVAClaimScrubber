@@ -53,7 +53,7 @@ public sealed class RulePack
                 severity = Enum.TryParse<Severity>(s, true, out var parsed) ? parsed : throw new FormatException($"The override for {id} has severity \"{s}\": it's info, warn, deny or reject.");
             overrides.Add(new RuleOverride(known.First(k => k.Equals(id, StringComparison.OrdinalIgnoreCase)), (bool?)v["enabled"] ?? true, severity, (string?)v["why"]));
         }
-        return new RulePack
+        var pack = new RulePack
         {
             Name = name,
             Path = path,
@@ -63,6 +63,8 @@ public sealed class RulePack
             Overrides = overrides,
             Rules = o["rules"]?.DeepClone() as JsonArray ?? [],
         };
+        PayerRuleChecks.Validate(pack);
+        return pack;
     }
 
     public static RulePack Load(string path) => Read(File.ReadAllText(path), path);

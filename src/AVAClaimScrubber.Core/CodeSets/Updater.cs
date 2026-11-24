@@ -5,7 +5,9 @@ namespace AVAClaimScrubber.Core.CodeSets;
 /// <summary>
 /// Downloads the public code sets from their publishers, only when asked (the Update button): ICD-10-CM from CMS (the
 /// fiscal year's order file: a new year starts each October 1), HCPCS Level II from CMS (the newest quarterly file
-/// that's out), and NUCC's taxonomy CSV (the newest version NUCC lists). Nothing is sent but the requests themselves.
+/// that's out), CMS's MUE tables (practitioner and outpatient hospital), and NUCC's taxonomy CSV (the newest version NUCC
+/// lists). CMS's NCCI PTP files sit behind the AMA's licence page, so they aren't downloaded: the person accepts the
+/// licence on cms.gov and imports them. Nothing is sent but the requests themselves.
 /// Each download is saved as given, with where it came from, so a report can say which version it checked against.
 /// </summary>
 public static partial class Updater
@@ -57,6 +59,23 @@ public static partial class Updater
             }
             throw new HttpRequestException("none of the last five quarters' files could be found");
         });
+        foreach (var (kind, file, name) in new[] { ("practitioner-services", "mue-practitioner.csv", "MUE (practitioner)"), ("facility-outpatient-hospital-services", "mue-hospital.csv", "MUE (outpatient hospital)") })
+            await Try(name, async () =>
+            {
+                // The newest quarter's table that's out.
+                var q = new DateOnly(today.Year, (today.Month - 1) / 3 * 3 + 1, 1).AddMonths(3);
+                for (var i = 0; i < 5; i++, q = q.AddMonths(-3))
+                {
+                    var quarter = (q.Month - 1) / 3 + 1;
+                    var url = $"https://www.cms.gov/files/zip/medicare-ncci-{q.Year}-q{quarter}-{kind}-mue-table.zip";
+                    using var response = await http.GetAsync(url, cancel);
+                    if (!response.IsSuccessStatusCode) continue;
+                    var bytes = await response.Content.ReadAsByteArrayAsync(cancel);
+                    CodeSets.Store(folder, file, bytes, name, $"{q.Year} Q{quarter}", url, n => n.EndsWith(".csv", StringComparison.OrdinalIgnoreCase));
+                    return $"{name}: {q.Year} Q{quarter}, from CMS.";
+                }
+                throw new HttpRequestException("none of the last five quarters' tables could be found");
+            });
         await Try("NUCC provider taxonomy", async () =>
         {
             var page = await http.GetStringAsync(NuccPage, cancel);

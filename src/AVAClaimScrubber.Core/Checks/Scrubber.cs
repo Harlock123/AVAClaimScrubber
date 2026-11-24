@@ -20,7 +20,7 @@ public sealed class ScrubResult
 public static class Scrubber
 {
     public static IReadOnlyList<ICheck> Checks(ScrubSettings? settings = null) =>
-        [new EnvelopeChecks(), new StructureChecks(), new ArithmeticChecks(), new CodeSetChecks(settings?.CodeSets)];
+        [new EnvelopeChecks(), new StructureChecks(), new ArithmeticChecks(), new CodeSetChecks(settings?.CodeSets), new EditChecks(settings?.CodeSets), new PayerRuleChecks(settings?.Packs ?? [])];
 
     public static ScrubResult Scrub(ClaimBatch batch, ScrubSettings? settings = null)
     {

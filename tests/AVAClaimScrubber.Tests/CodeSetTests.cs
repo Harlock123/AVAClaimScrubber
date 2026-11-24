@@ -21,7 +21,9 @@ public sealed class CodeSetTests
         Assert.DoesNotContain("X9", sets.HcpcsModifiers!);
         Assert.Equal("Family Medicine Physician", sets.Taxonomy!["207Q00000X"]);
         Assert.Equal(52, PlaceOfService.Codes.Count);
-        Assert.Equal(["HCPCS Level II", "ICD-10-CM", "NUCC provider taxonomy"], sets.Info.Select(i => i.Name).Order());
+        Assert.Equal(["HCPCS Level II", "ICD-10-CM", "MUE (practitioner)", "NCCI PTP edits", "NUCC provider taxonomy"], sets.Info.Select(i => i.Name).Order());
+        Assert.Equal(new MueEdit("G0439", 1, 2, "Code Descriptor / CPT Instruction"), sets.MuePractitioner!["G0439"]);
+        Assert.Equal('0', sets.Ptp!["G0438|G0439"].Modifier);
         Assert.Throws<FormatException>(() => CodeSets.ParseIcd("not an order file"));
     }
 

@@ -31,10 +31,14 @@ cd samples && python3 make_samples.py        # remakes the sample claims
   - `Checks/`: `Finding` (with `Rule`, `Fix`, `ScrubContext`, `ICheck`), `EnvelopeChecks` (layer 1: E and S rules),
     `StructureChecks` (layer 2: L rules, the HL hierarchy, required loops, lines, pointers), `ArithmeticChecks`
     (layer 3: A rules), `RulePack` (JSON packs: overrides per payer, and payer rules), `Scrubber` (runs the layers,
-    then applies the packs' overrides). `CodeSetChecks` (layer 4: C rules).
+    then applies the packs' overrides). `CodeSetChecks` (layer 4: C rules), `EditChecks` (layer 5: N rules: NCCI PTP,
+    MUE, age and sex by ICD-10-CM chapter), `PayerRuleChecks` (layer 6: the packs' rules, ids P-pack-id; kinds
+    timely-filing, prior-auth, require-modifier, max-units, not-covered), `Corrector` (a corrected copy: the fixes, and
+    nothing else, in a new file).
   - `CodeSets/`: `CodeSets` (ICD-10-CM, HCPCS Level II and modifiers, NUCC taxonomy, licensed CPT: parsers for each
     publisher's file layout, and a store in the settings folder with a manifest of where each came from),
-    `PlaceOfService` (built in, from CMS's page), `Updater` (downloads from CMS and NUCC, only when asked).
+    `PlaceOfService` (built in, from CMS's page), `Updater` (downloads from CMS and NUCC, only when asked). NCCI PTP
+    files are imported, never downloaded: CMS keeps them behind the AMA's licence page.
 - `src/AVAClaimScrubber/`: the window, built in code (`MainWindow.cs`; `MainWindow.Parts.cs` holds the hooks later
   parts fill; `MainWindow.Rules.cs` the Rules tab and the packs). Settings (rules, code sets) live under
   `MainWindow.SettingsFolder`, which tests point at a temporary folder (`SettingsIsolation`).
@@ -52,7 +56,8 @@ cd samples && python3 make_samples.py        # remakes the sample claims
   shows it, and never names a member ID, account number or person: its text must be safe to show an AI agent.
 - **Code sets come from their publishers, never bundled.** The program downloads them on Update; tests use
   `tests/…/Data/`, unchanged excerpts of the real files. CPT is the AMA's: shape only unless a licensed file is
-  loaded, and none is in the repository. `CLAIMS_LIVE_DOWNLOADS=1 dotnet test` checks the real downloads still work.
+  loaded, and none is in the repository. The test NCCI pairs are invented (and say so); never put CMS's PTP files in
+  the repository. `CLAIMS_LIVE_DOWNLOADS=1 dotnet test` checks the real downloads still work.
 - **Dates are checked as of the batch's creation (BHT04)**, not today, so a file checks the same whenever it's checked.
 - **No real claims in the repository.** Every person, member, provider, NPI and tax ID in the samples is invented.
 

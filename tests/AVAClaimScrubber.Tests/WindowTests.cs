@@ -76,6 +76,45 @@ public sealed class RulesWindowTests
     });
 }
 
+public sealed class CorrectionWindowTests
+{
+    [Fact]
+    public void A_corrected_copy_is_written_as_a_new_file_opened_and_checks_clean() => HeadlessApp.Run(() =>
+    {
+        var root = Samples.Copy();
+        var w = new MainWindow([Path.Combine(root, "envelope-errors.x12")]);
+        w.Show();
+        HeadlessApp.Settle();
+        var target = Path.Combine(root, "envelope-errors-corrected.x12");
+        w.PickSaveFile = (_, _) => Task.FromResult<string?>(target);
+        w.SaveCorrected().GetAwaiter().GetResult();
+        HeadlessApp.Settle();
+        Assert.True(File.Exists(target));
+        Assert.Equal(3, w.LastChanges.Count);
+        Assert.Equal(2, w.OpenFiles.Count);
+        Assert.Empty(w.OpenFiles.Single(o => o.Path == target).Result.Findings);
+        Assert.Contains("Now: 1 claim, 1 clean, 0 findings.", w.txtStatusBar.Text);
+        // The original is untouched.
+        Assert.Equal(File.ReadAllText(Samples.Path("envelope-errors.x12")), File.ReadAllText(Path.Combine(root, "envelope-errors.x12")));
+        w.Close();
+    });
+
+    [Fact]
+    public void The_code_sets_tab_lists_each_set_and_imports_one() => HeadlessApp.Run(() =>
+    {
+        var w = new MainWindow();
+        w.Show();
+        HeadlessApp.Settle();
+        var text = string.Join("\n", w.CodeSetsPanel.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+        Assert.Contains("ICD-10-CM", text);
+        Assert.Contains("CPT (licensed)", text);
+        Assert.Contains("not loaded (shape check only)", text);
+        w.ImportCodeSet("cpt", Samples.Path("clinic-837p.x12"));
+        Assert.StartsWith("That file isn't CPT (licensed)", w.txtStatusBar.Text);
+        w.Close();
+    });
+}
+
 internal static class VisualExtensions
 {
     public static IEnumerable<Avalonia.Visual> GetVisualDescendants(this Avalonia.Visual v) => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(v);

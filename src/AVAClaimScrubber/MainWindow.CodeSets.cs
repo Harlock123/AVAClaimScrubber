@@ -76,10 +76,14 @@ public sealed partial class MainWindow
             "hcpcs" => ("hcpcs.txt", "HCPCS Level II"),
             "taxonomy" => ("taxonomy.csv", "NUCC provider taxonomy"),
             "cpt" => ("cpt.txt", "CPT (licensed)"),
-            _ => throw new ArgumentException("kind is icd, hcpcs, taxonomy or cpt."),
+            "ncci" => ($"ncci-ptp-{Directory.EnumerateFiles(CodeSetsFolder, "ncci-ptp*.txt").Count() + 1}.txt", "NCCI PTP edits"),
+            "mue" => ("mue-practitioner.csv", "MUE (practitioner)"),
+            "mue-hospital" => ("mue-hospital.csv", "MUE (outpatient hospital)"),
+            _ => throw new ArgumentException("kind is icd, hcpcs, taxonomy, cpt, ncci, mue or mue-hospital."),
         };
         try
         {
+            Directory.CreateDirectory(CodeSetsFolder);
             var bytes = File.ReadAllBytes(path);
             var text = System.Text.Encoding.Latin1.GetString(bytes);
             _ = kind switch
@@ -87,6 +91,8 @@ public sealed partial class MainWindow
                 "icd" => CodeSets.ParseIcd(text).Count,
                 "hcpcs" => CodeSets.ParseHcpcs(text).Codes.Count,
                 "taxonomy" => CodeSets.ParseTaxonomy(System.Text.Encoding.UTF8.GetString(bytes)).Count,
+                "ncci" => CodeSets.ParsePtp(text).Count,
+                "mue" or "mue-hospital" => CodeSets.ParseMue(text).Count,
                 _ => CodeSets.ParseCpt(text).Count,
             };
             CodeSets.Store(CodeSetsFolder, file, bytes, name, "imported", Path.GetFileName(path));
@@ -108,15 +114,16 @@ public sealed partial class MainWindow
         CodeSetsPanel.Children.Add(new TextBlock
         {
             Text = "Diagnosis and procedure codes are checked against these. Update downloads the public ones from their publishers (CMS's ICD-10-CM and HCPCS Level II, " +
-                   "NUCC's provider taxonomy): only when you press it, and only those requests leave this computer. CPT belongs to the AMA: without a licensed CPT file, " +
-                   "CPT codes get a shape check only. Places of service are built in.",
+                   "CMS's MUE tables, NUCC's provider taxonomy): only when you press it, and only those requests leave this computer. CMS's NCCI PTP edits are behind " +
+                   "the AMA's licence page on cms.gov: accept it there, download the practitioner (or hospital) files, and import each. CPT belongs to the AMA: without a " +
+                   "licensed CPT file, CPT codes get a shape check only. Places of service are built in.",
             TextWrapping = TextWrapping.Wrap, Foreground = Look.Dim, FontSize = 12.5, MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Left,
         });
         var bar = new WrapPanel();
         var update = new Button { Content = "Update (download)", Margin = new Thickness(0, 6, 8, 6) };
         update.Click += async (_, _) => await UpdateCodeSets();
         bar.Children.Add(update);
-        foreach (var (kind, label) in new[] { ("icd", "Import ICD-10-CM…"), ("hcpcs", "Import HCPCS…"), ("taxonomy", "Import Taxonomy…"), ("cpt", "Load Licensed CPT…") })
+        foreach (var (kind, label) in new[] { ("icd", "Import ICD-10-CM…"), ("hcpcs", "Import HCPCS…"), ("taxonomy", "Import Taxonomy…"), ("ncci", "Import NCCI PTP…"), ("mue", "Import MUE…"), ("cpt", "Load Licensed CPT…") })
         {
             var b = new Button { Content = label, Margin = new Thickness(0, 6, 8, 6) };
             var k = kind;
@@ -129,7 +136,7 @@ public sealed partial class MainWindow
         CodeSetsPanel.Children.Add(bar);
 
         var rows = new List<(string Name, string Version, string Source, string Loaded, string Count)>();
-        foreach (var name in new[] { "ICD-10-CM", "HCPCS Level II", "NUCC provider taxonomy", "CPT (licensed)" })
+        foreach (var name in new[] { "ICD-10-CM", "HCPCS Level II", "NUCC provider taxonomy", "NCCI PTP edits", "MUE (practitioner)", "MUE (outpatient hospital)", "CPT (licensed)" })
         {
             var info = CodeSets.Info.FirstOrDefault(i => i.Name == name);
             rows.Add(info == null

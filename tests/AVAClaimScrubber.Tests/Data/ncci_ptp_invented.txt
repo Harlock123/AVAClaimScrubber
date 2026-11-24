@@ -1,0 +1,5 @@
+INVENTED FOR TESTS: these are not CMS NCCI edits. CMS publishes its PTP edits under the AMA's CPT licence;
+this file only follows their layout (tab-separated: column 1, column 2, pre-1996 flag, effective, deletion, modifier).
+Column 1	Column 2	*=in existence prior to 1996	Effective Date	Deletion Date *=no data	Modifier 0=not allowed 1=allowed 9=not applicable	PTP Edit Rationale
+G0438	G0439		20110101	*	0	Invented for tests
+99213	J1100		20200101	*	1	Invented for tests

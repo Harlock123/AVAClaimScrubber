@@ -212,6 +212,44 @@ def make_coding_errors():
     return b.text(control=11)
 
 
+def make_edits():
+    """NCCI, MUE and age or sex problems (layer 5). The NCCI pairs the tests use are invented (CMS's PTP files are
+    licensed from the AMA); the MUE for G0439 is CMS's (1 a day)."""
+    b = Batch("005010X222A1")
+    header(b, "N")
+    billing(b, 1)
+    claims = [
+        ("NCCI-01", "F", "19700101", [("G0438", [], 175.00, 1, "20261103", "1"), ("G0439", [], 175.00, 1, "20261103", "1")], ["Z0000"]),
+        ("NCCI-OK-02", "F", "19700101", [("99213", [], 125.00, 1, "20261103", "1"), ("J1100", ["59"], 15.00, 1, "20261103", "1")], ["J45909"]),
+        ("NCCI-03", "F", "19700101", [("99213", [], 125.00, 1, "20261103", "1"), ("J1100", [], 15.00, 1, "20261103", "1")], ["J45909"]),
+        ("MUE-04", "F", "19700101", [("G0439", [], 350.00, 2, "20261103", "1")], ["Z0000"]),
+        ("SEX-05", "M", "19860101", [("99213", [], 125.00, 1, "20261103", "1")], ["O80"]),
+        ("AGE-06", "F", "19860101", [("99213", [], 125.00, 1, "20261103", "1")], ["P0700"]),
+    ]
+    for n, (account, sex, birth, lines, dx) in enumerate(claims):
+        subscriber(b, n + 2, 1, f"SUN6{n:05d}", "HALE", "SAM", birth, sex)
+        claim_p(b, account, lines, dx)
+    return b.text(control=13)
+
+
+def make_payer():
+    """Sun Plan's payer rules (layer 6): timely filing, prior authorization, telehealth modifiers."""
+    b = Batch("005010X222A1")
+    header(b, "R")
+    billing(b, 1)
+    claims = [
+        ("LATE-01", [("99213", [], 125.00, 1, "20260701", "1")], {}),
+        ("AUTH-02", [("90837", [], 180.00, 1, "20261103", "1")], {}),
+        ("AUTH-OK-03", [("90837", [], 180.00, 1, "20261103", "1")], {"extra": [("REF", "G1", "AUTH0042")]}),
+        ("TELE-04", [("99213", [], 125.00, 1, "20261103", "1")], {"pos": "10"}),
+        ("TELE-OK-05", [("99213", ["95"], 125.00, 1, "20261103", "1")], {"pos": "10"}),
+    ]
+    for n, (account, lines, kw) in enumerate(claims):
+        subscriber(b, n + 2, 1, f"SUN7{n:05d}", "PRICE", "JO", "19750101", "F")
+        claim_p(b, account, lines, ["F329"], **kw)
+    return b.text(control=15)
+
+
 if __name__ == "__main__":
     with open("clinic-837p.x12", "w", newline="") as f:
         f.write(make_837p().text(control=1))
@@ -223,4 +261,8 @@ if __name__ == "__main__":
         f.write(make_structure_errors())
     with open("coding-errors.x12", "w", newline="") as f:
         f.write(make_coding_errors())
+    with open("edits-837p.x12", "w", newline="") as f:
+        f.write(make_edits())
+    with open("payer-837p.x12", "w", newline="") as f:
+        f.write(make_payer())
     print("billing NPI", BILLING_NPI, "rendering", RENDER_NPI, "facility", FACILITY_NPI)

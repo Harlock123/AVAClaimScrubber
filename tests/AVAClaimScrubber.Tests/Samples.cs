@@ -24,6 +24,8 @@ public static class Samples
         File.Copy(DataPath("icd10cm_order_extract.txt"), System.IO.Path.Combine(folder, "icd10cm.txt"));
         File.Copy(DataPath("hcpcs_extract.txt"), System.IO.Path.Combine(folder, "hcpcs.txt"));
         File.Copy(DataPath("taxonomy_extract.csv"), System.IO.Path.Combine(folder, "taxonomy.csv"));
+        File.Copy(DataPath("mue_practitioner_extract.csv"), System.IO.Path.Combine(folder, "mue-practitioner.csv"));
+        File.Copy(DataPath("ncci_ptp_invented.txt"), System.IO.Path.Combine(folder, "ncci-ptp-1.txt"));
         return Core.CodeSets.CodeSets.Load(folder);
     });
 
