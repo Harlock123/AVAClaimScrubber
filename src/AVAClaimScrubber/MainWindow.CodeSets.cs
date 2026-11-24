@@ -107,6 +107,12 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>A download's address as its site and file (cms.gov · january-2027-alpha-numeric-hcpcs-file.zip); anything else as it is.</summary>
+    private static string Shorter(string source) =>
+        Uri.TryCreate(source, UriKind.Absolute, out var u) && u.Scheme.StartsWith("http", StringComparison.Ordinal)
+            ? $"{(u.Host.StartsWith("www.", StringComparison.Ordinal) ? u.Host[4..] : u.Host)} · {Path.GetFileName(u.AbsolutePath)}"
+            : source;
+
     public void ShowCodeSets()
     {
         CodeSetsPanel.Children.Clear();
@@ -141,7 +147,7 @@ public sealed partial class MainWindow
             var info = CodeSets.Info.FirstOrDefault(i => i.Name == name);
             rows.Add(info == null
                 ? (name, name.StartsWith("CPT", StringComparison.Ordinal) ? "not loaded (shape check only)" : "not loaded", "", "", "")
-                : (name, info.Version, info.Source, info.Loaded.LocalDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), info.Count.ToString("N0", CultureInfo.InvariantCulture)));
+                : (name, info.Version, Shorter(info.Source), info.Loaded.LocalDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), info.Count.ToString("N0", CultureInfo.InvariantCulture)));
         }
         rows.Add(("Place of service", "built in", PlaceOfService.Source, "", PlaceOfService.Codes.Count.ToString(CultureInfo.InvariantCulture)));
         var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
@@ -155,7 +161,7 @@ public sealed partial class MainWindow
             {
                 var t = new TextBlock
                 {
-                    Text = cells[i], FontSize = head ? 11.5 : 12.5, Margin = new Thickness(0, 3, 22, 3), MaxWidth = i == 4 ? 520 : double.PositiveInfinity, TextWrapping = TextWrapping.Wrap,
+                    Text = cells[i], FontSize = head ? 11.5 : 12.5, Margin = new Thickness(0, 3, 22, 3), MaxWidth = i == 4 ? 340 : i == 1 ? 300 : double.PositiveInfinity, TextWrapping = TextWrapping.Wrap,
                     Foreground = head ? Look.Heading : i == 1 && cells[i].StartsWith("not loaded", StringComparison.Ordinal) ? Look.Warn : i == 0 ? Look.Text : Look.Code,
                 };
                 Grid.SetRow(t, r);

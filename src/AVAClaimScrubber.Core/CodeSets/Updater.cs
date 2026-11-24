@@ -54,8 +54,9 @@ public static partial class Updater
                 using var response = await http.GetAsync(url, cancel);
                 if (!response.IsSuccessStatusCode) continue;
                 var bytes = await response.Content.ReadAsByteArrayAsync(cancel);
-                CodeSets.Store(folder, "hcpcs.txt", bytes, "HCPCS Level II", $"{months[(quarter.Month - 1) / 3]} {quarter.Year}", url, n => Regex.IsMatch(Path.GetFileName(n), @"ANWEB.*\.txt$", RegexOptions.IgnoreCase));
-                return $"HCPCS Level II: {months[(quarter.Month - 1) / 3]} {quarter.Year}, from CMS.";
+                var label = $"{char.ToUpperInvariant(months[(quarter.Month - 1) / 3][0])}{months[(quarter.Month - 1) / 3][1..]} {quarter.Year}";
+                CodeSets.Store(folder, "hcpcs.txt", bytes, "HCPCS Level II", label, url, n => Regex.IsMatch(Path.GetFileName(n), @"ANWEB.*\.txt$", RegexOptions.IgnoreCase));
+                return $"HCPCS Level II: {label}, from CMS.";
             }
             throw new HttpRequestException("none of the last five quarters' files could be found");
         });

@@ -172,7 +172,8 @@ public static class Replay
     private static bool IsDenial(Adjustment a) => a.Group != "PR" && !Normal.Contains(a.Reason) && a.Amount > 0;
 
     /// <summary>Replays a response file's denials against the open files' scrubs (claims matched by CLM01).</summary>
-    public static ReplayReport Run(ResponseFile response, IEnumerable<ScrubResult> results)
+    /// <param name="sets">The code sets the checks ran with: a miss by a check whose data isn't loaded says so.</param>
+    public static ReplayReport Run(ResponseFile response, IEnumerable<ScrubResult> results, CodeSets.CodeSets? sets = null)
     {
         var all = results.ToList();
         var rows = new List<ReplayRow>();
@@ -212,7 +213,7 @@ public static class Replay
                         {
                             rules.Count > 0 ? $"checks {string.Join(", ", rules.Take(6))}{(rules.Count > 6 ? "…" : "")} found nothing" : null,
                             kinds.Count > 0 ? $"a payer rule ({string.Join(", ", kinds)}) would catch it" : null,
-                        }.Where(x => x != null)) + ".");
+                        }.Where(x => x != null)) + "." + Unloaded(rules, sets));
             rows.Add(new ReplayRow { Denial = d, Result = result, Claim = claim, Rules = rules, Kinds = kinds, CaughtBy = caught, Verdict = verdict, Explanation = why });
         }
         return new ReplayReport { Response = response, Rows = rows, Results = all };
@@ -270,6 +271,19 @@ public static class Replay
         ["1"] = ["S1"], ["2"] = ["S1"], ["4"] = ["S1"], ["5"] = ["S1"], ["6"] = ["S1"], ["7"] = ["S1", "S4", "A6"], ["8"] = ["S2"], ["9"] = ["S2"],
         ["I12"] = ["S1", "S4"], ["s3"] = ["L4", "L5", "L6", "L7", "L8", "L9"], ["s8"] = ["S1", "S2", "S3", "S4"],
     };
+
+    /// <summary>Why a check may have found nothing: the code set it needs isn't loaded (when the sets are known).</summary>
+    private static string Unloaded(IReadOnlyList<string> rules, CodeSets.CodeSets? sets)
+    {
+        if (sets == null) return "";
+        var missing = new List<string>();
+        if (rules.Contains("N1") && sets.Ptp == null) missing.Add("CMS's NCCI PTP edits");
+        if (rules.Contains("N2") && sets.MuePractitioner == null && sets.MueHospital == null) missing.Add("CMS's MUE tables");
+        if (rules.Any(r => r is "C1" or "C2") && sets.Icd == null) missing.Add("ICD-10-CM");
+        if (rules.Contains("C3") && sets.Hcpcs == null) missing.Add("HCPCS Level II");
+        if (rules.Contains("C8") && sets.Taxonomy == null) missing.Add("the NUCC taxonomy");
+        return missing.Count == 0 ? "" : $" {string.Join(" and ", missing)} {(missing.Count == 1 && !missing[0].EndsWith('s') ? "isn't" : "aren't")} loaded (the Code Sets tab).";
+    }
 
     private static (IReadOnlyList<string> Rules, IReadOnlyList<string> Kinds, string? NotCheckable) Map(Denial d)
     {

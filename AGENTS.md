@@ -24,6 +24,7 @@ dotnet run --project src/AVAClaimScrubber -- --mcp --http 8777 --root FOLDER    
 dotnet run --project src/AVAClaimScrubber -- --deidentify INPUT OUTPUT           # de-identified copies, file or folder
 cd samples && python3 make_samples.py        # remakes the sample claims and responses
 CLAIMS_LIVE_DOWNLOADS=1 dotnet test          # also downloads the real code sets and checks the samples against them
+CLAIMS_SHOTS=Screenshots CLAIMS_LIVE_DOWNLOADS=1 dotnet test --filter Screenshots   # the README's pictures
 CLAIMS_LIVE_SERVER=http://localhost:11434 CLAIMS_LIVE_MODEL=qwen3:1.7b dotnet test --filter LiveModelTests
 ```
 
@@ -76,7 +77,8 @@ CLAIMS_LIVE_SERVER=http://localhost:11434 CLAIMS_LIVE_MODEL=qwen3:1.7b dotnet te
 - `tests/AVAClaimScrubber.Tests/`: xUnit v3 on Avalonia.Headless. `Agents/AgentTests` (every tool, the no-leak test,
   every recipe, the chat on `FakeModelServer` and `FakeMessagesServer`), `LiveAgentTests` (the doors), `LiveModelTests`
   (opt-in).
-- `samples/`: invented claims, from `make_samples.py`; `samples/rules/` an invented payer's rule pack.
+- `samples/`: invented claims, from `make_samples.py`; `samples/responses/` the 999s, 277CA and 835 that answer
+  them; `samples/rules/` an invented payer's rule pack. `Screenshots/`: the README's pictures (`Screenshots.cs`).
 
 ## Rules that keep it working
 

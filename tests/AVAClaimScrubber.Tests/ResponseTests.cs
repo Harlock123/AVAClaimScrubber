@@ -117,3 +117,18 @@ public sealed class ReplayTests
         Assert.Null(Replay.Draft(again));
     }
 }
+
+public sealed class ReplayNoteTests
+{
+    [Fact]
+    public void A_miss_by_a_check_whose_code_set_isnt_loaded_says_so()
+    {
+        var response = ResponseReader.Load(Samples.Path("responses/sunplan-835.x12"))!;
+        var noSets = new Core.CodeSets.CodeSets();
+        var results = new[] { "edits-837p.x12", "payer-837p.x12", "coding-errors.x12" }.Select(n => Samples.Scrub(n, new ScrubSettings { CodeSets = noSets })).ToList();
+        var row = Replay.Run(response, results, noSets).Rows.Single(r => r.Denial.Account == "NCCI-03");
+        Assert.Equal(Verdict.Missed, row.Verdict);
+        Assert.EndsWith("CMS's NCCI PTP edits aren't loaded (the Code Sets tab).", row.Explanation);
+        Assert.DoesNotContain("loaded", Replay.Run(response, results).Rows.Single(r => r.Denial.Account == "NCCI-03").Explanation);
+    }
+}

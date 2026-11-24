@@ -706,7 +706,7 @@ public sealed partial class ClaimsTools(IExplorerHost host)
 
     /// <summary>A replay as the agent may see it: the de-identified response against the de-identified claims, with the findings of the real ones.</summary>
     private ReplayReport LensReplay(IExplorerSession s, OpenResponse r) =>
-        Replay.Run(LensResponse(s, r), [.. s.Files.Select(f => new ScrubResult { Batch = Lensed(s, f).Batch, Findings = f.Result.Findings })]);
+        Replay.Run(LensResponse(s, r), [.. s.Files.Select(f => new ScrubResult { Batch = Lensed(s, f).Batch, Findings = f.Result.Findings })], s.Settings.CodeSets);
 
     private static bool Matches(string path, string name)
     {

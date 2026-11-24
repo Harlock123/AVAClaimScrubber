@@ -39,7 +39,7 @@ public sealed partial class MainWindow
     public void ShowResponses()
     {
         var results = _open.Select(o => o.Result).ToList();
-        Replays = [.. _responses.Select(r => Replay.Run(r.File, results))];
+        Replays = [.. _responses.Select(r => Replay.Run(r.File, results, CodeSets))];
         ResponsesPanel.Children.Clear();
         ResponsesPanel.Children.Add(new TextBlock { Text = "Responses", FontSize = 22, FontWeight = FontWeight.SemiBold, Foreground = Look.Text });
         if (Replays.Count == 0)
@@ -77,7 +77,7 @@ public sealed partial class MainWindow
     private Control RowView(ReplayRow row)
     {
         var brush = row.Verdict switch { Verdict.Caught => Look.Clean, Verdict.Missed => Look.Reject, _ => Look.Dim };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("110,150,*"), Margin = new Thickness(0, 4, 0, 0) };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("110,200,*"), Margin = new Thickness(0, 4, 0, 0) };
         var verdict = new TextBlock { Text = Report.Verdict(row.Verdict), Foreground = brush, FontWeight = FontWeight.SemiBold, FontSize = 12.5 };
         var claim = new TextBlock
         {
