@@ -12,7 +12,22 @@ public static class Samples
 
     public static ClaimBatch Load(string name) => ClaimReader.Load(Path(name));
 
-    public static ScrubResult Scrub(string name, ScrubSettings? settings = null) => Scrubber.Scrub(Load(name), settings);
+    /// <summary>Checks a sample, with the code-set excerpts loaded unless other settings are given.</summary>
+    public static ScrubResult Scrub(string name, ScrubSettings? settings = null) => Scrubber.Scrub(Load(name), settings ?? new ScrubSettings { CodeSets = CodeSets });
+
+    /// <summary>The tests' code sets: excerpts of the real files (Data/), loaded once.</summary>
+    public static Core.CodeSets.CodeSets CodeSets => s_codeSets.Value;
+
+    private static readonly Lazy<Core.CodeSets.CodeSets> s_codeSets = new(() =>
+    {
+        var folder = Directory.CreateTempSubdirectory("claims-codes-").FullName;
+        File.Copy(DataPath("icd10cm_order_extract.txt"), System.IO.Path.Combine(folder, "icd10cm.txt"));
+        File.Copy(DataPath("hcpcs_extract.txt"), System.IO.Path.Combine(folder, "hcpcs.txt"));
+        File.Copy(DataPath("taxonomy_extract.csv"), System.IO.Path.Combine(folder, "taxonomy.csv"));
+        return Core.CodeSets.CodeSets.Load(folder);
+    });
+
+    public static string DataPath(string name) => System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Folder)!, "tests", "AVAClaimScrubber.Tests", "Data", name);
 
     /// <summary>A copy of the samples in a new temporary folder (agents and tests write into it).</summary>
     public static string Copy()

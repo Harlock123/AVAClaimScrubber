@@ -1,0 +1,21 @@
+01952 C61     1 Malignant neoplasm of prostate                               Malignant neoplasm of prostate
+04306 E11     0 Type 2 diabetes mellitus                                     Type 2 diabetes mellitus
+04311 E1110   1 Type 2 diabetes mellitus with ketoacidosis without coma      Type 2 diabetes mellitus with ketoacidosis without coma
+04314 E1121   1 Type 2 diabetes mellitus with diabetic nephropathy           Type 2 diabetes mellitus with diabetic nephropathy
+04315 E1122   1 Type 2 diabetes mellitus w diabetic chronic kidney disease   Type 2 diabetes mellitus with diabetic chronic kidney disease
+04418 E1165   1 Type 2 diabetes mellitus with hyperglycemia                  Type 2 diabetes mellitus with hyperglycemia
+04421 E119    1 Type 2 diabetes mellitus without complications               Type 2 diabetes mellitus without complications
+05943 F32     0 Depressive episode                                           Depressive episode
+05944 F320    1 Major depressive disorder, single episode, mild              Major depressive disorder, single episode, mild
+05953 F329    1 Major depressive disorder, single episode, unspecified       Major depressive disorder, single episode, unspecified
+11589 I10     1 Essential (primary) hypertension                             Essential (primary) hypertension
+11634 I214    1 Non-ST elevation (NSTEMI) myocardial infarction              Non-ST elevation (NSTEMI) myocardial infarction
+13475 J189    1 Pneumonia, unspecified organism                              Pneumonia, unspecified organism
+13601 J45     0 Asthma                                                       Asthma
+13603 J4520   1 Mild intermittent asthma, uncomplicated                      Mild intermittent asthma, uncomplicated
+13622 J45909  1 Unspecified asthma, uncomplicated                            Unspecified asthma, uncomplicated
+25197 N400    1 Benign prostatic hyperplasia without lower urinry tract symp Benign prostatic hyperplasia without lower urinary tract symptoms
+28589 O80     1 Encounter for full-term uncomplicated delivery               Encounter for full-term uncomplicated delivery
+29099 P0700   1 Extremely low birth weight newborn, unspecified weight       Extremely low birth weight newborn, unspecified weight
+96540 Z0000   1 Encntr for general adult medical exam w/o abnormal findings  Encounter for general adult medical examination without abnormal findings
+97085 Z3800   1 Single liveborn infant, delivered vaginally                  Single liveborn infant, delivered vaginally

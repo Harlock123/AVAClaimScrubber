@@ -35,7 +35,6 @@ public sealed partial class MainWindow
     /// <summary>Every pack in use: the folder's, then those added.</summary>
     public IReadOnlyList<RulePack> Packs => [.. _folderPacks, .. _addedPacks];
 
-    private ScrubSettings PackSettings() => new() { Packs = Packs };
 
     private void LoadPacks()
     {
@@ -112,7 +111,7 @@ public sealed partial class MainWindow
             RulesPanel.Children.Add(new TextBlock { Text = "Doesn't read: " + problem, Foreground = Look.Reject, FontSize = 12.5, TextWrapping = TextWrapping.Wrap });
 
         var hits = _open.SelectMany(o => o.Result.Findings).GroupBy(f => f.Rule.Id).ToDictionary(g => g.Key, g => g.Count());
-        foreach (var layer in Scrubber.AllRules(PackSettings()).GroupBy(r => r.Layer))
+        foreach (var layer in Scrubber.AllRules(Settings()).GroupBy(r => r.Layer))
         {
             RulesPanel.Children.Add(new TextBlock { Text = LayerName(layer.Key).ToUpperInvariant(), FontSize = 11, Foreground = Look.Heading, Margin = new Thickness(0, 16, 0, 2) });
             foreach (var r in layer)

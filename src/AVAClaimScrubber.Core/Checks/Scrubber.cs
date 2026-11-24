@@ -19,7 +19,8 @@ public sealed class ScrubResult
 /// <summary>Runs the layers of checks over a batch, in order: envelope and syntax, structure, arithmetic, code sets, edits, payer rules.</summary>
 public static class Scrubber
 {
-    public static IReadOnlyList<ICheck> Checks(ScrubSettings? settings = null) => [new EnvelopeChecks(), new StructureChecks(), new ArithmeticChecks()];
+    public static IReadOnlyList<ICheck> Checks(ScrubSettings? settings = null) =>
+        [new EnvelopeChecks(), new StructureChecks(), new ArithmeticChecks(), new CodeSetChecks(settings?.CodeSets)];
 
     public static ScrubResult Scrub(ClaimBatch batch, ScrubSettings? settings = null)
     {
@@ -55,8 +56,11 @@ public static class Scrubber
     public static IEnumerable<Rule> AllRules(ScrubSettings? settings = null) => Checks(settings).SelectMany(c => c.Rules).OrderBy(r => r.Layer).ThenBy(r => r.Id, StringComparer.Ordinal);
 }
 
-/// <summary>What the checks work with beyond the claims: rule packs (and, in later layers, code sets).</summary>
+/// <summary>What the checks work with beyond the claims: rule packs and code sets.</summary>
 public sealed class ScrubSettings
 {
     public IReadOnlyList<RulePack> Packs { get; init; } = [];
+
+    /// <summary>The code sets loaded (null: none, and layer 4 says so).</summary>
+    public CodeSets.CodeSets? CodeSets { get; init; }
 }

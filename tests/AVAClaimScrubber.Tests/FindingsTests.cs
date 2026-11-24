@@ -68,13 +68,13 @@ public sealed class FindingsTests
               "overrides": { "A4": { "severity": "warn", "why": "Sun Plan pays lines outside the period" },
                              "S4": { "enabled": false } } }
             """);
-        var settings = new ScrubSettings { Packs = [pack] };
+        var settings = new ScrubSettings { Packs = [pack], CodeSets = Samples.CodeSets };
         var p = Samples.Scrub("clinic-837p.x12", settings);
         Assert.DoesNotContain(p.Findings, f => f.Rule.Id == "S4");
         var i = Samples.Scrub("hospital-837i.x12", settings);
         Assert.Equal(Severity.Warn, i.Findings.Single().Severity);
         // A pack for another payer changes nothing.
-        var other = new ScrubSettings { Packs = [Core.Checks.RulePack.Read("""{ "format": "avaclaimscrubber.rules", "name": "Other", "payers": ["XYZ"], "overrides": { "S4": { "enabled": false } } }""")] };
+        var other = new ScrubSettings { CodeSets = Samples.CodeSets, Packs = [Core.Checks.RulePack.Read("""{ "format": "avaclaimscrubber.rules", "name": "Other", "payers": ["XYZ"], "overrides": { "S4": { "enabled": false } } }""")] };
         Assert.Contains(Samples.Scrub("clinic-837p.x12", other).Findings, f => f.Rule.Id == "S4");
         Assert.Contains("doesn't exist", Assert.Throws<FormatException>(() => Core.Checks.RulePack.Read("""{ "format": "avaclaimscrubber.rules", "name": "x", "overrides": { "Z9": { "enabled": false } } }""")).Message);
         Assert.Contains("info, warn, deny or reject", Assert.Throws<FormatException>(() => Core.Checks.RulePack.Read("""{ "format": "avaclaimscrubber.rules", "name": "x", "overrides": { "A1": { "severity": "loud" } } }""")).Message);

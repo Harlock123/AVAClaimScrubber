@@ -79,7 +79,7 @@ def subscriber(b, hl, parent, member, last, first, birth, sex, payer="SUNPLAN", 
     b.seg("NM1", "PR", "2", payer, "", "", "", "", "PI", payer_id)
 
 
-def claim_p(b, account, lines, dx, pos="11", total=None, freq="1", extra=None, render=RENDER_NPI):
+def claim_p(b, account, lines, dx, pos="11", total=None, freq="1", extra=None, render=RENDER_NPI, taxonomy="207Q00000X"):
     """A professional claim (2300 and its 2400 lines). lines: (code, modifiers, charge, units, date, pointers)."""
     total = total if total is not None else sum(l[2] for l in lines)
     b.seg("CLM", account, f"{total:.2f}", "", "", f"{pos}:B:{freq}", "Y", "A", "Y", "Y")
@@ -88,7 +88,7 @@ def claim_p(b, account, lines, dx, pos="11", total=None, freq="1", extra=None, r
     b.seg("HI", *[("ABK" if i == 0 else "ABF") + ":" + d for i, d in enumerate(dx)])
     if render:
         b.seg("NM1", "82", "1", "OKAFOR", "LINDA", "", "", "", "XX", render)
-        b.seg("PRV", "PE", "PXC", "207Q00000X")
+        b.seg("PRV", "PE", "PXC", taxonomy)
     for n, (code, mods, charge, units, date, pointers) in enumerate(lines, 1):
         b.seg("LX", str(n))
         b.seg("SV1", ":".join(["HC", code] + mods), f"{charge:.2f}", "UN", str(units), "", "", pointers)
@@ -190,6 +190,28 @@ def make_structure_errors():
     return b.text(control=9)
 
 
+def make_coding_errors():
+    """Code-set problems (layer 4), one a claim, and a clean claim that uses modifiers and a HCPCS code."""
+    b = Batch("005010X222A1")
+    header(b, "C")
+    billing(b, 1)
+    claims = [
+        ("CODES-CLEAN-01", [("99213", ["25"], 125.00, 1, "20261103", "1"), ("G0439", [], 175.00, 1, "20261103", "1")], ["I10"], {}),
+        ("HEADER-02", [("99213", [], 125.00, 1, "20261103", "1")], ["E11"], {}),
+        ("NOTACODE-03", [("99213", [], 125.00, 1, "20261103", "1")], ["E1199"], {}),
+        ("NPI-04", [("99213", [], 125.00, 1, "20261103", "1")], ["I10"], {"render": BAD_NPI}),
+        ("ENDED-05", [("G9975", [], 10.00, 1, "20261103", "1")], ["I10"], {}),
+        ("MODIFIER-06", [("99213", ["X9"], 125.00, 1, "20261103", "1")], ["I10"], {}),
+        ("POS-07", [("99213", [], 125.00, 1, "20261103", "1")], ["I10"], {"pos": "30"}),
+        ("TAXONOMY-08", [("99213", [], 125.00, 1, "20261103", "1")], ["I10"], {"taxonomy": "207Q0000"}),
+        ("CPT-09", [("9921", [], 125.00, 1, "20261103", "1")], ["I10"], {}),
+    ]
+    for n, (account, lines, dx, kw) in enumerate(claims):
+        subscriber(b, n + 2, 1, f"SUN5{n:05d}", "MORENO", "ALICE", "19800101", "F")
+        claim_p(b, account, lines, dx, **kw)
+    return b.text(control=11)
+
+
 if __name__ == "__main__":
     with open("clinic-837p.x12", "w", newline="") as f:
         f.write(make_837p().text(control=1))
@@ -199,4 +221,6 @@ if __name__ == "__main__":
         f.write(make_envelope_errors())
     with open("structure-errors.x12", "w", newline="") as f:
         f.write(make_structure_errors())
+    with open("coding-errors.x12", "w", newline="") as f:
+        f.write(make_coding_errors())
     print("billing NPI", BILLING_NPI, "rendering", RENDER_NPI, "facility", FACILITY_NPI)

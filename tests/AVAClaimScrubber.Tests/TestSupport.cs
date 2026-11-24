@@ -34,6 +34,15 @@ public static class HeadlessApp
 internal static class SettingsIsolation
 {
     [System.Runtime.CompilerServices.ModuleInitializer]
-    internal static void Isolate() =>
-        AVAClaimScrubber.MainWindow.FolderOverride = Directory.CreateTempSubdirectory("avaclaimscrubber-settings-").FullName;
+    internal static void Isolate()
+    {
+        var folder = Directory.CreateTempSubdirectory("avaclaimscrubber-settings-").FullName;
+        AVAClaimScrubber.MainWindow.FolderOverride = folder;
+        // Windows in tests have the code-set excerpts, as a person who'd pressed Update would have the full sets.
+        var codes = Path.Combine(folder, "CodeSets");
+        Directory.CreateDirectory(codes);
+        File.Copy(Samples.DataPath("icd10cm_order_extract.txt"), Path.Combine(codes, "icd10cm.txt"));
+        File.Copy(Samples.DataPath("hcpcs_extract.txt"), Path.Combine(codes, "hcpcs.txt"));
+        File.Copy(Samples.DataPath("taxonomy_extract.csv"), Path.Combine(codes, "taxonomy.csv"));
+    }
 }
