@@ -12,7 +12,7 @@ public sealed class App : Application
     {
         Styles.Add(new FluentTheme());
         RequestedThemeVariant = ThemeVariant.Dark;
-        // Denser trees and lists than Fluent's defaults: a legacy system has thousands of items.
+        // Denser trees and lists than Fluent's defaults: a batch can have hundreds of claims.
         Styles.Add(new Style(x => x.OfType<TreeViewItem>()) { Setters = { new Setter(TreeViewItem.MinHeightProperty, 26.0) } });
         Styles.Add(new Style(x => x.OfType<ListBoxItem>()) { Setters = { new Setter(ListBoxItem.PaddingProperty, new Thickness(10, 4)), new Setter(ListBoxItem.MinHeightProperty, 26.0) } });
     }
@@ -21,9 +21,13 @@ public sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // AVAClaimScrubber [files…]: opens and checks the files.
+            // AVAClaimScrubber [files…] [--real | --deidentify]: opens and checks the files; the flags say what AI agents see.
             var args = desktop.Args ?? [];
-            desktop.MainWindow = new MainWindow(args.Where(a => !a.StartsWith("--", StringComparison.Ordinal)));
+            desktop.MainWindow = new MainWindow(args.Where(a => !a.StartsWith("--", StringComparison.Ordinal)))
+            {
+                RealFromCommandLine = args.Contains("--real"),
+                ForceDeidentify = args.Contains("--deidentify"),
+            };
         }
         base.OnFrameworkInitializationCompleted();
     }

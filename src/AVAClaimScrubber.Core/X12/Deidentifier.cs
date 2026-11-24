@@ -101,6 +101,9 @@ public sealed class Deidentifier
     /// <summary>How many days every date is moved by (negative: back).</summary>
     public int ShiftDays { get; }
 
+    /// <summary>The stand-in for a claim's account number (CLM01, CLP01, a 277's TRN02), as every file read with this key has it.</summary>
+    public string Account(string value) => Code("account:", value);
+
     /// <summary>The file read and de-identified.</summary>
     public Deidentified Load(string path) => Apply(File.ReadAllText(path));
 

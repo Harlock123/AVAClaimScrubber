@@ -4,7 +4,7 @@ Checks HIPAA 837 claims (professional and institutional, 5010) before they're se
 clearinghouse (a 999 or 277CA) or denied by the payer (an 835). Each finding says what's wrong, where (the claim, its
 loop and element, such as `2400 SV1-04`), why (the rule and where it comes from) and how to fix it.
 
-*Work in progress: milestone 5 of 7 (999, 277CA and 835 responses, denial replay, drafted rules, reports).*
+*Work in progress: milestone 6 of 7 (the MCP server for AI agents, de-identified, and the AI Chat).*
 
 ## Running it
 

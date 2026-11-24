@@ -15,7 +15,6 @@ public sealed partial class MainWindow
         new TabItem { Header = "Code Sets", Content = BuildCodeSetsPage(), FontSize = 14 },
         new TabItem { Header = "Responses", Content = new ScrollViewer { Content = ResponsesPanel }, FontSize = 14 },
     ];
-    private partial IEnumerable<object> MoreMenus(Func<string, Action, Key?, KeyModifiers, MenuItem> item) => [];
 
     private partial IEnumerable<object> MoreViewItems(Func<string, Action, Key?, KeyModifiers, MenuItem> item) =>
         [
@@ -74,5 +73,9 @@ public sealed partial class MainWindow
         ShowRules();
         ShowCodeSets();
         ShowResponses();
+        AgentsReady();
     }
+
+    /// <summary>The AI side starts once the window is built (MainWindow.AI.cs).</summary>
+    partial void AgentsReady();
 }

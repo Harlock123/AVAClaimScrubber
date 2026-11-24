@@ -63,4 +63,19 @@ public sealed class ScrubSettings
 
     /// <summary>The code sets loaded (null: none, and layer 4 says so).</summary>
     public CodeSets.CodeSets? CodeSets { get; init; }
+
+    /// <summary>The program's settings folder (AVAClaimScrubber under the user's application data).</summary>
+    public static string DefaultFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) is { Length: > 0 } d ? d : Path.GetTempPath(), "AVAClaimScrubber");
+
+    /// <summary>The rule packs (Rules/*.json) and code sets (CodeSets/) kept in a settings folder, as the window keeps them; what can't be read is left out.</summary>
+    public static ScrubSettings Load(string folder)
+    {
+        CodeSets.CodeSets? sets = null;
+        try
+        {
+            sets = AVAClaimScrubber.Core.CodeSets.CodeSets.Load(Path.Combine(folder, "CodeSets"));
+        }
+        catch (Exception e) when (e is FormatException or IOException) { }
+        return new ScrubSettings { Packs = RulePack.LoadFolder(Path.Combine(folder, "Rules")).Packs, CodeSets = sets };
+    }
 }

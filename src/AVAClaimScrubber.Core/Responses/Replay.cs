@@ -318,7 +318,7 @@ public static class Replay
     /// draft for a person to check against the payer's policy: each rule's "why" says what it was drafted from.
     /// Null when there's nothing to draft.
     /// </summary>
-    public static JsonObject? Draft(ReplayReport report)
+    public static JsonObject? Draft(ReplayReport report, DateOnly? today = null)
     {
         var missed = report.Rows.Where(r => r.Verdict == Verdict.Missed && r.Claim != null && r.Kinds.Count > 0).ToList();
         if (missed.Count == 0) return null;
@@ -387,7 +387,8 @@ public static class Replay
         {
             ["format"] = RulePack.Format,
             ["name"] = $"{name} (drafted)",
-            ["version"] = (report.Response.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy.MM.dd", CultureInfo.InvariantCulture),
+            // The day it was drafted: the remittance's own date is about the claims, so it stays out of the pack.
+            ["version"] = (today ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy.MM.dd", CultureInfo.InvariantCulture),
             ["description"] = $"Drafted by AVA Claim Scrubber from the denials in {report.Response.Name} that a payer rule would have caught. A draft: check each rule against {name}'s policy before relying on it.",
             ["draft"] = true,
             ["payers"] = new JsonArray([.. payers.Select(p => (JsonNode)p)]),

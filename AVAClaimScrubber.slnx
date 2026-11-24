@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/AVAClaimScrubber.Core/AVAClaimScrubber.Core.csproj" />
+    <Project Path="src/AVAClaimScrubber.Mcp/AVAClaimScrubber.Mcp.csproj" />
     <Project Path="src/AVAClaimScrubber/AVAClaimScrubber.csproj" />
   </Folder>
   <Folder Name="/tests/">

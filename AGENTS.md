@@ -7,15 +7,24 @@ how the code is put together and the rules that keep it working.
 
 An 837 claim scrubber in C# on .NET 10 and Avalonia 11.3: it reads 837P and 837I (5010) files into their loops and
 claims, checks them in layers (envelope and syntax, structure, arithmetic and dates, code sets, NCCI and MUE edits,
-payer rules), and says what's wrong, where, why and how to fix it.
+payer rules), and says what's wrong, where, why and how to fix it. It reads 999, 277CA and 835 responses and replays
+their denials against the findings. It has an AI Chat (F12) and an MCP server (in the open window with `--mcp
+--attach`, headless with `--mcp`, over the network with `--http`, port 8777). Agents see de-identified values unless
+the person allows otherwise; the checks always run on the real files.
 
 ## Commands
 
 ```bash
 dotnet build AVAClaimScrubber.slnx
 dotnet test AVAClaimScrubber.slnx
-dotnet run --project src/AVAClaimScrubber [files]
-cd samples && python3 make_samples.py        # remakes the sample claims
+dotnet run --project src/AVAClaimScrubber [files] [--real | --deidentify]
+dotnet run --project src/AVAClaimScrubber -- --mcp --root samples [--real]       # the MCP server on stdio
+dotnet run --project src/AVAClaimScrubber -- --mcp --attach                      # a bridge to the open window
+dotnet run --project src/AVAClaimScrubber -- --mcp --http 8777 --root FOLDER     # over the network, with a token
+dotnet run --project src/AVAClaimScrubber -- --deidentify INPUT OUTPUT           # de-identified copies, file or folder
+cd samples && python3 make_samples.py        # remakes the sample claims and responses
+CLAIMS_LIVE_DOWNLOADS=1 dotnet test          # also downloads the real code sets and checks the samples against them
+CLAIMS_LIVE_SERVER=http://localhost:11434 CLAIMS_LIVE_MODEL=qwen3:1.7b dotnet test --filter LiveModelTests
 ```
 
 `dotnet test | head` stalls: write the output to a file and grep it.
@@ -45,10 +54,28 @@ cd samples && python3 make_samples.py        # remakes the sample claims
     publisher's file layout, and a store in the settings folder with a manifest of where each came from),
     `PlaceOfService` (built in, from CMS's page), `Updater` (downloads from CMS and NUCC, only when asked). NCCI PTP
     files are imported, never downloaded: CMS keeps them behind the AMA's licence page.
+- `src/AVAClaimScrubber.Mcp/`: the MCP server, no Avalonia.
+  - `ClaimsTools.cs` (the tools: `Session` and `Write` wrap every handler, run it on the host's thread and add
+    `"deidentified"` to its answer; `Lensed`, `LensResponse` and `LensReplay` give the agent the de-identified copy of a
+    file, with the findings of the real one), `ClaimsTools.Orchestration.cs` (batch, steps files, checkpoints of the
+    open files and the view).
+  - `Hosting.cs`: `ViewState`, `ViewPicture`, `IViewPainter`, `OpenFile` and `OpenResponse`, `IExplorerSession` (the
+    open 837s and their scrubs, the responses, the settings, `SeeRealValues`), `ExplorerHost` (with the session's one
+    `Deidentifier`), `HeadlessSession`.
+  - `ClaimsServer.cs`: the instructions every agent is told, the argument checks, the recording of calls.
+    `Recipes.cs`: the 8 recipes. `LiveListener`, `LiveBridge`, `NetworkListener`, `McpCommandLine`, `Workspace` and
+    `Json` are AVAHL7Explorer's with the names changed: fix them together.
 - `src/AVAClaimScrubber/`: the window, built in code (`MainWindow.cs`; `MainWindow.Parts.cs` holds the hooks later
-  parts fill; `MainWindow.Rules.cs` the Rules tab and the packs). Settings (rules, code sets) live under
-  `MainWindow.SettingsFolder`, which tests point at a temporary folder (`SettingsIsolation`).
-- `tests/AVAClaimScrubber.Tests/`: xUnit v3 on Avalonia.Headless.
+  parts fill; `MainWindow.Rules.cs` the Rules tab and the packs; `MainWindow.CodeSets.cs`, `MainWindow.Responses.cs`;
+  `MainWindow.AI.cs` the AI menu, the chat's dock and the view as agents see it; `MainWindow.Agents.cs` the doors,
+  the chat and `AgentsSeeRealValues`). Settings (rules, code sets) live under `MainWindow.SettingsFolder`, which
+  tests point at a temporary folder (`SettingsIsolation`). `Agents/`: `Chat/` and `ChatPanel.cs` are copies of
+  AVAHL7Explorer's (themselves AVA Modeler's `AVAModeler.Chat`) with this app's wording: a fix there may be wanted
+  here. `LiveAgents.cs` (`WindowSession`), `AgentMain.cs` (`--mcp`), `AgentSettings.cs`. `ViewPainter.cs` is
+  AVALegacyLens's.
+- `tests/AVAClaimScrubber.Tests/`: xUnit v3 on Avalonia.Headless. `Agents/AgentTests` (every tool, the no-leak test,
+  every recipe, the chat on `FakeModelServer` and `FakeMessagesServer`), `LiveAgentTests` (the doors), `LiveModelTests`
+  (opt-in).
 - `samples/`: invented claims, from `make_samples.py`; `samples/rules/` an invented payer's rule pack.
 
 ## Rules that keep it working
@@ -70,6 +97,20 @@ cd samples && python3 make_samples.py        # remakes the sample claims
   necessity) are `NotCheckable`, with the reason: never call those misses.
 - **Drafted rules are drafts.** `Replay.Draft` saves a pack with `"draft": true` and each rule's evidence in its "why";
   the window saves it to a file and never adds it: a person checks it against the payer's policy first.
+- **Agents read the de-identified copy; the checks read the real file.** De-identifying moves dates but not BHT04, so
+  checks on a de-identified copy would differ: never run them there. Every tool reads files through `Lensed` (or
+  `LensResponse`, `LensReplay`); a tool that reads a file another way would bypass de-identification: don't. Anything
+  a tool writes comes from what the agent may see, except `deidentify_file`, which always de-identifies.
+- **The no-leak test is the contract.** `AgentTests.No_tool_result_…` calls every tool on every sample and fails if
+  any answer, or any file an agent wrote, holds a real name, member ID, account, payer claim or authorization number,
+  address or date from the samples (`Phi()`). A new tool goes into it; a new place for people's details goes into
+  `Deidentifier` (shared with X12 Explorer) and `Phi()`.
+- **Agents never write over or delete, and never change what the checks use.** Paths go through `Workspace`; rule
+  packs an agent writes or drafts are files for the person to add.
+- **New tools** need `[Description]` on the tool and every parameter (snake_case names), the right `ReadOnly`
+  annotation, a place in `AgentTests.ToolNames`, a test, and a line in the README. Recipes are run call by call.
+- **No real model, keys or user settings in tests.** `AgentSettingsIsolation` points `AgentSettings.FolderOverride`
+  at a temporary folder; chat tests answer from the fake servers.
 - **Dates are checked as of the batch's creation (BHT04)**, not today, so a file checks the same whenever it's checked.
 - **No real claims in the repository.** Every person, member, provider, NPI and tax ID in the samples is invented.
 
