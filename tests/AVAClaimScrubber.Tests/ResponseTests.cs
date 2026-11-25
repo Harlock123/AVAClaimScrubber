@@ -118,6 +118,55 @@ public sealed class ReplayTests
     }
 }
 
+public sealed class DraftAllTests
+{
+    private static ResponseFile Response(string name) => ResponseReader.Load(Samples.Path("responses/" + name))!;
+
+    private static readonly string[] Claims = ["payer-837p.x12", "payer-later-837p.x12", "edits-837p.x12", "coding-errors.x12"];
+
+    internal static string Rule(System.Text.Json.Nodes.JsonNode r) => (string?)r["kind"] switch
+    {
+        "prior-auth" or "not-covered" => $"{(string?)r["kind"]} {string.Join(",", r["procedures"]!.AsArray().Select(x => (string?)x))}",
+        "timely-filing" => $"timely-filing {(int?)r["days"]}",
+        "max-units" => $"max-units {(string?)r["procedure"]} {(decimal?)r["units"]:0.##}",
+        var k => $"{k} {(string?)r["modifier"]} in {string.Join(",", r["places"]!.AsArray().Select(x => (string?)x))}",
+    };
+
+    [Fact]
+    public void Several_remittances_draft_one_pack_for_each_payer_with_the_evidence_merged()
+    {
+        var results = Claims.Select(n => Samples.Scrub(n)).ToList();
+        var reports = new[] { "sunplan-835.x12", "sunplan-835-1204.x12", "lakeshore-835-1205.x12" }.Select(n => Replay.Run(Response(n), results)).ToList();
+        Assert.Equal(["Missed AUTH-21 line 1 197", "Missed LATE-22 line 1 29", "Missed TELE-23 line 1 4"], reports[1].Rows.Select(ResponseTests.Line));
+        Assert.Equal(["Missed UNITS-31 line 1 119", "Missed NOTCOV-33 line 1 96"], reports[2].Rows.Select(ResponseTests.Line));
+
+        var packs = Replay.DraftAll(reports, new DateOnly(2026, 12, 8));
+        Assert.Equal(["LAKESHORE HEALTH (drafted)", "SUNPLAN (drafted)"], packs.Select(p => (string?)p["name"]));
+        Assert.Equal(["lake01-drafted-rules.json", "sun01-drafted-rules.json"], packs.Select(Replay.FileName));
+        var lake = RulePack.Read(Replay.Text(packs[0]));
+        var sun = RulePack.Read(Replay.Text(packs[1]));
+        Assert.Equal(["LAKE01"], lake.Payers);
+        Assert.Equal(["SUN01"], sun.Payers);
+        Assert.Equal(["not-covered 97810", "max-units 97110 2"], lake.Rules.Select(r => Rule(r!)));
+        // Two weeks of Sun Plan: both therapy codes, the shorter filing gap (134 days, not 137), and 95 for both visits.
+        Assert.Equal(["prior-auth 90834,90837", "timely-filing 133", "require-modifier 95 in 10"], sun.Rules.Select(r => Rule(r!)));
+        var auth = (string?)sun.Rules[0]!["why"];
+        Assert.Equal("Drafted from 2 denials in sunplan-835.x12 and sunplan-835-1204.x12 (CARC 197: Precertification/authorization/notification/pre-treatment absent.): check which procedures SUNPLAN needs authorization for.", auth);
+        Assert.Contains("paid 99213 and 99214 in place of service 10 with modifier 95", (string?)sun.Rules[2]!["why"]);
+        Assert.Equal("Drafted by AVA Claim Scrubber from the denials in sunplan-835.x12 and sunplan-835-1204.x12 that a payer rule would have caught. A draft: check each rule against SUNPLAN's policy before relying on it.", sun.Description);
+
+        // One file drafts what it did before.
+        Assert.Equal(["prior-auth 90837", "timely-filing 136", "require-modifier 95 in 10"], Replay.DraftAll([reports[0]]).Single()["rules"]!.AsArray().Select(r => Rule(r!)));
+
+        // With the drafted packs in use, nothing in any of the three is missed, and there's nothing left to draft.
+        var settings = new ScrubSettings { CodeSets = Samples.CodeSets, Packs = [lake, sun] };
+        var packed = Claims.Select(n => Samples.Scrub(n, settings)).ToList();
+        var again = reports.Select(r => Replay.Run(r.Response, packed)).ToList();
+        Assert.All(again, r => Assert.Equal(0, r.Count(Verdict.Missed)));
+        Assert.Empty(Replay.DraftAll(again));
+    }
+}
+
 public sealed class ReplayNoteTests
 {
     [Fact]

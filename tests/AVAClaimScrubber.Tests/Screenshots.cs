@@ -103,6 +103,26 @@ public sealed class Screenshots
     });
 
     [Fact]
+    public void Drafts() => HeadlessApp.Run(() =>
+    {
+        if (Environment.GetEnvironmentVariable("CLAIMS_SHOTS") is not { Length: > 0 } dir) return;
+        Directory.CreateDirectory(dir);
+        var root = Samples.Copy();
+        var w = new MainWindow(new[] { "payer-837p.x12", "payer-later-837p.x12" }.Select(f => Path.Combine(root, f))) { Width = 1500, Height = 900 };
+        w.AgentSettings.ChatOpen = false;
+        w.Show();
+        try
+        {
+            foreach (var f in new[] { "sunplan-835.x12", "sunplan-835-1204.x12", "lakeshore-835-1205.x12" }) w.Open(Path.Combine(root, "responses", f));
+            w.Tabs.SelectedIndex = 5;
+            w.PickSaveFile = (_, name) => Task.FromResult<string?>(Path.Combine(root, name));
+            w.SaveDrafts().GetAwaiter().GetResult();
+            Save(w, Path.Combine(dir, "drafts.png"));
+        }
+        finally { w.Close(); }
+    });
+
+    [Fact]
     public void Ai_chat() => HeadlessApp.Run(() =>
     {
         if (Environment.GetEnvironmentVariable("CLAIMS_SHOTS") is not { Length: > 0 } dir) return;

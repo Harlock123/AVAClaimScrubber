@@ -27,13 +27,13 @@ public static class ClaimsServer
         - Each finding names its rule, where it is (claim, line, loop, element, segment number) and, when the fix is clear (a count, a total, a line number, a decimal point), the fix. explain_rule says why the rule exists and its source.
         - Code sets come from their publishers (CMS, NUCC) and only check what's loaded: get_code_sets says which. CPT belongs to the AMA: without a licensed file only its shape is checked. Don't present a code as valid or invalid from memory: lookup_code it.
 
-        Responses: replay sets each denial (an 835's CARC and RARC codes, a 277CA's rejection, a 999's error) against the claim's findings: caught, missed, not checkable from a claim (medical necessity; eligibility unless the payer's 271 about the patient is open), or no claim open. Opening a 271 (open_file) re-checks the claims against it. draft_rule_pack turns missed denials a payer rule would catch into a draft pack; the person checks it and adds it. test_rule_pack shows what a pack would flag before anyone adds it.
+        Responses: replay sets each denial (an 835's CARC and RARC codes, a 277CA's rejection, a 999's error) against the claim's findings: caught, missed, not checkable from a claim (medical necessity; eligibility unless the payer's 271 about the patient is open), or no claim open. Opening a 271 (open_file) re-checks the claims against it. draft_rule_pack turns missed denials a payer rule would catch into a draft pack (with all, from every open remittance together, one pack for each payer); the person checks it and adds it. test_rule_pack shows what a pack would flag before anyone adds it.
 
         A good way to work: list_files, open_file the claims (and any responses); get_batch for the claims' statuses; get_findings (worst first) and get_claim to explain one, citing the rule and where; lookup_code for any code; save_corrected_copy for the clear fixes; replay and draft_rule_pack for a remittance; export_report for the lot (.html or .xlsx). render_view shows the person a claim with its problems marked, and show_in_view selects it in their window. batch runs several calls at once; save_steps keeps a session's calls to run again on next month's files.
 
         Say what a finding means for the claim (rejected at the door, denied after, or a warning), and what the person should change. Never invent a payer's policy: a payer rule comes from a rule pack or a drafted one the person approves.
 
-        The server's prompts are saved recipes (scrub a batch, fix and resend, explain a denial, replay a remittance, draft payer rules, look up codes, try a rule pack, month-end report): step-by-step plans with the exact tool calls.
+        The server's prompts are saved recipes (scrub a batch, fix and resend, explain a denial, replay a remittance, draft payer rules, draft them from weeks of remittances, look up codes, try a rule pack, month-end report): step-by-step plans with the exact tool calls.
         """;
 
 

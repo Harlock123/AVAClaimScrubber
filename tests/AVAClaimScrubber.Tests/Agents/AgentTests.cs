@@ -114,8 +114,8 @@ public sealed class AgentTests
     private static IEnumerable<string> Strings(JsonElement e, string name) => e.GetProperty(name).EnumerateArray().Select(x => x.GetString()!);
 
     /// <summary>The 837 and response samples.</summary>
-    internal static readonly string[] Claims = ["clinic-837p.x12", "hospital-837i.x12", "envelope-errors.x12", "structure-errors.x12", "coding-errors.x12", "edits-837p.x12", "payer-837p.x12"];
-    internal static readonly string[] Responses = ["responses/structure-999.x12", "responses/envelope-999.x12", "responses/clinic-277ca.x12", "responses/sunplan-835.x12", "responses/sunplan-271.x12"];
+    internal static readonly string[] Claims = ["clinic-837p.x12", "hospital-837i.x12", "envelope-errors.x12", "structure-errors.x12", "coding-errors.x12", "edits-837p.x12", "payer-837p.x12", "payer-later-837p.x12"];
+    internal static readonly string[] Responses = ["responses/structure-999.x12", "responses/envelope-999.x12", "responses/clinic-277ca.x12", "responses/sunplan-835.x12", "responses/sunplan-271.x12", "responses/sunplan-835-1204.x12", "responses/lakeshore-835-1205.x12"];
 
     // ───────────────────────────── the tools ─────────────────────────────
 
@@ -246,6 +246,25 @@ public sealed class AgentTests
         var pack = File.ReadAllText(Path.Combine(rig.Root, "drafts", "sunplan.json"));
         Assert.Equal(3, rig.Ok("test_rule_pack", new { pack, file = "payer-837p.x12" }).GetProperty("changes").GetArrayLength());
         Assert.Contains("isn't an open response", rig.Error("replay", new { file = "payer-837p.x12" }));
+    });
+
+    [Fact]
+    public void Weeks_of_remittances_draft_one_pack_for_each_payer() => WithRig(rig =>
+    {
+        Assert.Contains("No remittance (835) is open", rig.Error("draft_rule_pack", new { all = true }));
+        foreach (var f in new[] { "payer-837p.x12", "payer-later-837p.x12", "responses/sunplan-835.x12", "responses/sunplan-835-1204.x12", "responses/lakeshore-835-1205.x12" })
+            rig.Ok("open_file", new { file = f });
+        Assert.Contains("with all", rig.Ok("replay", new { file = "responses/sunplan-835-1204.x12" }).GetProperty("draft").GetString());
+        var drafts = rig.Ok("draft_rule_pack", new { all = true, output = "drafts" });
+        Assert.Equal(["LAKESHORE HEALTH (drafted)", "SUNPLAN (drafted)"], drafts.GetProperty("packs").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
+        Assert.Equal(["drafts/lake01-drafted-rules.json", "drafts/sun01-drafted-rules.json"], drafts.GetProperty("wrote").EnumerateArray().Select(p => p.GetString()));
+        var sun = File.ReadAllText(Path.Combine(rig.Root, "drafts", "sun01-drafted-rules.json"));
+        Assert.Contains("sunplan-835.x12 and sunplan-835-1204.x12", sun);
+        // Tried on the later claims, Sun Plan's draft flags its three denied claims there.
+        Assert.Equal(3, rig.Ok("test_rule_pack", new { pack = sun, file = "payer-later-837p.x12" }).GetProperty("changes").GetArrayLength());
+        // Saved again, the files the agent wrote are its own to replace; one file's draft still works as before.
+        rig.Ok("draft_rule_pack", new { all = true, output = "drafts" });
+        Assert.Equal(3, rig.Ok("draft_rule_pack", new { file = "responses/sunplan-835.x12" }).GetProperty("pack").GetProperty("rules").GetArrayLength());
     });
 
     [Fact]
@@ -395,7 +414,7 @@ public sealed class AgentTests
     public void The_list_of_real_values_the_no_leak_test_looks_for_covers_every_kind()
     {
         var phi = Phi();
-        foreach (var real in new[] { "MARTINEZ", "ELENA", "SUN100001", "SUN700003", "TOTAL-02", "CODES-CLEAN-01", "SP8350004", "SP2770002", "AUTH0042", "12 ELM STREET", "62704", "19700312", "20261103", "20261020" })
+        foreach (var real in new[] { "MARTINEZ", "ELENA", "SUN100001", "SUN700003", "LINDQVIST", "LAK800026", "NOTCOV-33", "LH8350003", "TOTAL-02", "CODES-CLEAN-01", "SP8350004", "SP2770002", "AUTH0042", "12 ELM STREET", "62704", "19700312", "20261103", "20261020" })
             Assert.Contains(real, phi);
         Assert.DoesNotContain("20261131", phi);
         Assert.DoesNotContain("OKAFOR", phi);
@@ -438,6 +457,7 @@ public sealed class AgentTests
             Check("render_view", new { file = f });
         }
         Check("draft_rule_pack", new { file = "responses/sunplan-835.x12", output = "leak/draft.json" });
+        Check("draft_rule_pack", new { all = true, output = "leak/drafts" });
         Check("test_rule_pack", new { pack = File.ReadAllText(Path.Combine(rig.Root, "rules", "sunplan.json")) });
         Check("save_corrected_copy", new { file = "clinic-837p.x12", output = "leak/fixed.x12" });
         Check("save_corrected_copy", new { file = "structure-errors.x12", output = "leak/fixed2.x12" });
@@ -469,7 +489,7 @@ public sealed class AgentTests
     public void Every_recipe_runs_call_by_call_on_de_identified_files() => HeadlessApp.Run(() =>
     {
         var recipes = typeof(Recipes).GetMethods(BindingFlags.Public | BindingFlags.Static).Where(m => m.GetCustomAttribute<McpServerPromptAttribute>() != null).ToList();
-        Assert.Equal(8, recipes.Count);
+        Assert.Equal(9, recipes.Count);
         foreach (var recipe in recipes)
         {
             using var rig = new Rig();

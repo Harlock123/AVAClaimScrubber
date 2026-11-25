@@ -525,28 +525,44 @@ public sealed partial class ClaimsTools(IExplorerHost host)
                     ["caught_by"] = r.CaughtBy.Count > 0 ? new JsonArray([.. r.CaughtBy.Select(f => f.Rule.Id).Distinct().Select(x => (JsonNode)x)]) : null,
                     ["checks"] = new JsonArray([.. r.Rules.Concat(r.Kinds).Select(x => (JsonNode)x)]), ["explanation"] = r.Explanation,
                 })]),
-                ["draft"] = Replay.Draft(Replay.Run(ResponseOf(s, file).File, [.. s.Files.Select(f => f.Result)])) != null ? "draft_rule_pack drafts payer rules from the missed denials." : null,
+                ["draft"] = Replay.Draft(Replay.Run(ResponseOf(s, file).File, [.. s.Files.Select(f => f.Result)])) != null
+                    ? "draft_rule_pack drafts payer rules from the missed denials" + (s.Responses.Count(r => r.File.Kind == "835") > 1 ? "; with all, from every open remittance, one pack for each payer." : ".") : null,
             };
         }, cancel);
 
     [McpServerTool(Name = "draft_rule_pack", ReadOnly = false, Idempotent = false, Destructive = false, OpenWorld = false)]
-    [Description("Drafts payer rules from a response's missed denials that a payer rule would have caught (prior authorization, not covered, a filing limit, a modifier a place of service needs, unit limits), each with the evidence in its \"why\". Answers with the pack's JSON; with output, also saves it as a new file. It's a draft: the person checks it against the payer's policy and adds it (File › Add Rule Pack…); it's never added by itself.")]
+    [Description("Drafts payer rules from a response's missed denials that a payer rule would have caught (prior authorization, not covered, a filing limit, a modifier a place of service needs, unit limits), each with the evidence in its \"why\". With all, drafts from every open remittance together: one pack for each payer, its denials across the files merged. Answers with the packs' JSON; with output, also saves them as new files. It's a draft: the person checks it against the payer's policy and adds it (File › Add Rule Pack…); it's never added by itself.")]
     public Task<string> DraftRulePack(
-        [Description("The open response: its name or path. Optional when one is open.")] string? file = null,
-        [Description("A new .json file to save the draft in, relative to the working folder. Optional.")] string? output = null,
+        [Description("The open response: its name or path. Optional when one is open, or with all.")] string? file = null,
+        [Description("A new .json file to save the draft in, relative to the working folder; with all, a folder to save each payer's pack in (named after its payer ID). Optional.")] string? output = null,
+        [Description("Draft from every open remittance together, one pack for each payer.")] bool all = false,
         CancellationToken cancel = default) =>
         Session("drafted a rule pack", s =>
         {
-            var report = Replay.Run(ResponseOf(s, file).File, [.. s.Files.Select(f => f.Result)]);
-            var draft = Replay.Draft(report) ?? throw new InvalidOperationException("Nothing to draft: no missed denial in it is one a payer rule would catch.");
-            var o = new JsonObject { ["pack"] = draft };
+            var results = s.Files.Select(f => f.Result).ToList();
+            List<JsonObject> drafts;
+            if (all)
+            {
+                var remits = s.Responses.Where(r => r.File.Kind == "835").ToList();
+                if (remits.Count == 0) throw new InvalidOperationException("No remittance (835) is open: open_file the payers' 835s first.");
+                drafts = Replay.DraftAll(remits.Select(r => Replay.Run(r.File, results)));
+                if (drafts.Count == 0) throw new InvalidOperationException("Nothing to draft: no missed denial in the open remittances is one a payer rule would catch.");
+            }
+            else
+                drafts = [Replay.Draft(Replay.Run(ResponseOf(s, file).File, results)) ?? throw new InvalidOperationException("Nothing to draft: no missed denial in it is one a payer rule would catch.")];
+            var o = all ? new JsonObject { ["packs"] = new JsonArray([.. drafts.Select(d => (JsonNode)d)]) } : new JsonObject { ["pack"] = drafts[0] };
             if (!string.IsNullOrWhiteSpace(output))
             {
-                var full = _files.Resolve(output, "A rule pack", [".json"]);
-                _files.CheckWritable(full);
-                File.WriteAllText(full, Replay.Text(draft));
-                _files.Wrote(full);
-                o["wrote"] = _files.Relative(full);
+                var wrote = new JsonArray();
+                foreach (var d in drafts)
+                {
+                    var full = all ? _files.Resolve(Path.Combine(output, Replay.FileName(d)), "A rule pack", [".json"]) : _files.Resolve(output, "A rule pack", [".json"]);
+                    _files.CheckWritable(full);
+                    File.WriteAllText(full, Replay.Text(d));
+                    _files.Wrote(full);
+                    wrote.Add(_files.Relative(full));
+                }
+                o["wrote"] = all ? wrote : wrote[0]!.DeepClone();
             }
             o["note"] = "A draft: check each rule against the payer's policy before it's used. test_rule_pack shows what it would flag.";
             return o;

@@ -167,6 +167,34 @@ public sealed class ResponseWindowTests
         Assert.Contains(w.OpenFiles.SelectMany(o => o.Result.Findings), f => f.Rule.Id == "V3");
         w.Close();
     });
+
+    [Fact]
+    public void Weeks_of_remittances_from_two_payers_draft_a_pack_for_each() => HeadlessApp.Run(() =>
+    {
+        var root = Samples.Copy();
+        var w = new MainWindow([Path.Combine(root, "payer-837p.x12"), Path.Combine(root, "payer-later-837p.x12")]);
+        w.Show();
+        try
+        {
+            HeadlessApp.Settle();
+            w.Open(Path.Combine(root, "responses", "sunplan-835.x12"));
+            w.Open(Path.Combine(root, "responses", "sunplan-835-1204.x12"));
+            w.Open(Path.Combine(root, "responses", "lakeshore-835-1205.x12"));
+            HeadlessApp.Settle();
+            var button = w.ResponsesPanel.GetVisualDescendants().OfType<Button>().Single(b => (string?)b.Content == "Draft From All Remittances…");
+            Assert.NotNull(button);
+            var asked = new List<string>();
+            w.PickSaveFile = (title, name) => { asked.Add($"{title} | {name}"); return Task.FromResult<string?>(Path.Combine(root, name)); };
+            w.SaveDrafts().GetAwaiter().GetResult();
+            Assert.Equal(["Save LAKESHORE HEALTH's drafted rule pack (1 of 2) | lake01-drafted-rules.json", "Save SUNPLAN's drafted rule pack (2 of 2) | sun01-drafted-rules.json"], asked);
+            Assert.Equal("Saved lake01-drafted-rules.json (2 rules for LAKESHORE HEALTH) and sun01-drafted-rules.json (3 rules for SUNPLAN). Check each rule against the payer's policy, then File › Add Rule Pack… to use it.", w.txtStatusBar.Text);
+            w.AddRulePack(Path.Combine(root, "lake01-drafted-rules.json"));
+            w.AddRulePack(Path.Combine(root, "sun01-drafted-rules.json"));
+            HeadlessApp.Settle();
+            Assert.All(w.Replays.Where(r => r.Response.Kind == "835"), r => Assert.Equal(0, r.Count(Core.Responses.Verdict.Missed)));
+        }
+        finally { w.Close(); }
+    });
 }
 
 internal static class VisualExtensions

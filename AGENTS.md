@@ -51,7 +51,8 @@ CLAIMS_LIVE_SERVER=http://localhost:11434 CLAIMS_LIVE_MODEL=qwen3:1.7b dotnet te
     used), `Responses` (`ResponseReader`: 999 → `Ack`, 277CA → `ClaimStatus`, 835 → `RemitClaim`, 271 →
     `Eligibility.EligibilityAnswer`; IK4-04, the bad value as sent, is never kept), `Replay` (each denial or rejection matched to its claim by CLM01, a 999's by control
     numbers and segment position; reason codes mapped to the checks that answer to them; verdicts Caught, Missed,
-    NotCheckable, NoClaim; `Draft` writes a rule pack from the missed denials a payer rule would catch).
+    NotCheckable, NoClaim; `Draft` writes a rule pack from the missed denials a payer rule would catch; `DraftAll` drafts from several
+    remittances at once, one pack for each payer, each rule's evidence merged across the files).
   - `Eligibility/`: `EligibilityAnswer` (a 271's people, as far as the V rules need them, and the one about a claim),
     `EligibilityCodes` and `ServiceTypes` (AVAEligibility's lists, copied).
   - `Reports/Report.cs`: the HTML page and the Excel workbook (ClosedXML).
@@ -68,7 +69,7 @@ CLAIMS_LIVE_SERVER=http://localhost:11434 CLAIMS_LIVE_MODEL=qwen3:1.7b dotnet te
     open 837s and their scrubs, the responses, the settings, `SeeRealValues`), `ExplorerHost` (with the session's one
     `Deidentifier`), `HeadlessSession`.
   - `ClaimsServer.cs`: the instructions every agent is told, the argument checks, the recording of calls.
-    `Recipes.cs`: the 8 recipes. `LiveListener`, `LiveBridge`, `NetworkListener`, `McpCommandLine`, `Workspace` and
+    `Recipes.cs`: the 9 recipes. `LiveListener`, `LiveBridge`, `NetworkListener`, `McpCommandLine`, `Workspace` and
     `Json` are AVAHL7Explorer's with the names changed: fix them together.
 - `src/AVAClaimScrubber/`: the window, built in code (`MainWindow.cs`; `MainWindow.Parts.cs` holds the hooks later
   parts fill; `MainWindow.Rules.cs` the Rules tab and the packs; `MainWindow.CodeSets.cs`, `MainWindow.Responses.cs`;
@@ -106,7 +107,7 @@ CLAIMS_LIVE_SERVER=http://localhost:11434 CLAIMS_LIVE_MODEL=qwen3:1.7b dotnet te
 - **Eligibility comes from AVAEligibility.** `Eligibility/EligibilityCodes.cs` and `Eligibility/ServiceTypes.cs` are
   copies of its lists (~/RiderProjects/AVAEligibility): fix them together. `EligibilityAnswer` reads only what the V
   rules need; AVAEligibility reads a 271 in full.
-- **Drafted rules are drafts.** `Replay.Draft` saves a pack with `"draft": true` and each rule's evidence in its "why";
+- **Drafted rules are drafts.** `Replay.Draft` and `Replay.DraftAll` save a pack with `"draft": true` and each rule's evidence in its "why";
   the window saves it to a file and never adds it: a person checks it against the payer's policy first.
 - **Agents read the de-identified copy; the checks read the real file.** De-identifying moves dates but not BHT04, so
   checks on a de-identified copy would differ: never run them there. Every tool reads files through `Lensed` (or

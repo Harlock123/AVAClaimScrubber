@@ -98,6 +98,25 @@ public static class Recipes
         return r.Text("Show each drafted rule with its evidence (its \"why\"), and what it would flag (test_rule_pack, given the pack's JSON). Say it's a draft: a filing limit drafted from denials is an upper bound, and a prior-authorization list only names the procedures seen. The person checks it against the payer's policy and adds it with File › Add Rule Pack…; never claim it's in use.");
     }
 
+    [McpServerPrompt(Name = "draft_rules_from_weeks", Title = "Draft payer rules from weeks of remittances")]
+    [Description("Opens several weeks of remittances beside the claims they answer, replays each, and drafts one rule pack for each payer from all their missed denials together.")]
+    public static string DraftRulesFromWeeks(
+        [Description("The remittances, comma-separated (default the samples' two Sun Plan 835s and Lakeshore Health's).")] string? responses = null,
+        [Description("The claims they answer, comma-separated (default \"payer-837p.x12, payer-later-837p.x12\").")] string? claims = null,
+        [Description("The folder to save the drafts in (default \"drafts\").")] string? output = null)
+    {
+        var resp = Or(responses, "responses/sunplan-835.x12, responses/sunplan-835-1204.x12, responses/lakeshore-835-1205.x12").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var c = Or(claims, "payer-837p.x12, payer-later-837p.x12").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var o = Or(output, "drafts");
+        var r = new Recipe($"Draft payer rules from the denials no check caught across {resp.Length} remittances, one pack for each payer, saved in {o}/ for the person.");
+        foreach (var f in c) r.Step(null, "open_file", new { file = f });
+        foreach (var f in resp) r.Step(null, "open_file", new { file = f });
+        foreach (var f in resp) r.Step($"Which denials in {Path.GetFileName(f)} were missed.", "replay", new { file = f });
+        r.Step("Draft from them all together, one pack for each payer, and save the drafts.", "draft_rule_pack", new { all = true, output = o });
+        r.Step("The packs already in use.", "list_rule_packs", new { });
+        return r.Text("For each payer, show its drafted rules with their evidence (each \"why\" names the files it rests on), and say what the weeks together showed that one file didn't: more procedures needing authorization, a shorter filing gap, the same modifier on more visits. It's a draft: a filing limit drafted from denials is an upper bound, and a list of procedures only names the ones seen. The person checks each pack against the payer's policy and adds it with File › Add Rule Pack…; never claim it's in use.");
+    }
+
     [McpServerPrompt(Name = "look_up_codes", Title = "Look up codes on a claim")]
     [Description("Looks up every code on a claim (diagnoses, procedures, modifiers, place of service, NPIs, taxonomy) and says what each is and whether it's valid for the claim's dates.")]
     public static string LookUpCodes(

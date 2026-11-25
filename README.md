@@ -119,6 +119,13 @@ limit below the shortest gap denied under CARC 29, a modifier from paid and deni
 unit limits from the units paid. Each rule's `why` says what it was drafted from. It's saved as a file for you to check
 against the payer's policy and add; it's never used by itself.
 
+A payer's habits show across weeks of remittances, where one 835 may hold a single example. With two or more open,
+**Draft From All Remittances…** drafts from them together: one pack for each payer (by the payer ID on the claims),
+with every procedure denied for want of authorization, the shortest filing gap, the same modifier on every kind of
+visit it was missing from, and the fewest units paid. Each rule's `why` names the files it rests on.
+
+![Three remittances from two payers open over two batches of claims, with Draft From All Remittances above them; the status bar says a pack was saved for each payer, two rules for Lakeshore Health and three for Sun Plan](Screenshots/drafts.png)
+
 ![A remittance replayed: three Sun Plan denials caught by its pack's rules, a bundled J1100 missed because the NCCI edits aren't loaded, an MUE and a sex conflict caught, and two eligibility denials that no check could catch](Screenshots/responses.png)
 
 ### Eligibility: the payer's 271
@@ -184,7 +191,7 @@ Agents only write new files in the working folder; they never change a rule pack
 | `list_rule_packs`, `test_rule_pack`, `write_rule_pack` | The packs in use; what a pack would add or take away; save one for you to add |
 | `get_code_sets`, `lookup_code`, `search_codes` | What's loaded; any code (ICD, HCPCS, modifier, CPT shape, taxonomy, place of service, NPI, CARC, RARC, 277 status); words in the code sets |
 | `get_response`, `replay` | A 999, 277CA or 835 in full; its denials replayed against the findings |
-| `draft_rule_pack` | Payer rules drafted from the missed denials, with their evidence |
+| `draft_rule_pack` | Payer rules drafted from the missed denials, with their evidence; with `all`, from every open remittance, one pack for each payer |
 | `save_corrected_copy` | A corrected copy with the clear fixes (de-identified when agents are) |
 | `export_report` | The report, `.html` or `.xlsx` |
 | `deidentify_file` | A de-identified copy of any X12 file, always, for sharing a problem claim |
@@ -193,7 +200,7 @@ Agents only write new files in the working folder; they never change a rule pack
 | `checkpoint`, `diff`, `render_checkpoint`, `restore_checkpoint` | Remember the open files and view, see what changed, go back |
 
 Recipes (MCP prompts): scrub a batch, make the clear fixes, explain a denial code, replay a remittance, draft payer
-rules from denials, look up a claim's codes, try a rule pack, and a month-end report.
+rules from denials (or from weeks of remittances, a pack for each payer), look up a claim's codes, try a rule pack, and a month-end report.
 
 ## Command line
 
@@ -207,8 +214,8 @@ AVAClaimScrubber --deidentify INPUT OUTPUT          # de-identified copies of a 
 
 `samples/` has invented claims, made by `make_samples.py`, each clean or with one planted problem named in its account
 number (`TOTAL-02`, `HEADER-02`, `NCCI-03`…): `clinic-837p.x12`, `hospital-837i.x12`, `envelope-errors.x12`,
-`structure-errors.x12`, `coding-errors.x12`, `edits-837p.x12` and `payer-837p.x12`; `responses/` has two 999s, a 277CA
-and an 835 that answer them, and Sun Plan's 271 eligibility answers for five of the patients; `rules/sunplan.json` an invented payer's pack. Every patient, member, provider, NPI and
+`structure-errors.x12`, `coding-errors.x12`, `edits-837p.x12`, `payer-837p.x12` and `payer-later-837p.x12` (two weeks on, for two payers); `responses/` has two
+999s, a 277CA and three 835s that answer them (Sun Plan's two weeks and Lakeshore Health's), and Sun Plan's 271 eligibility answers for five of the patients; `rules/sunplan.json` an invented payer's pack. Every patient, member, provider, NPI and
 tax ID is made up.
 
 ## What it isn't

@@ -43,19 +43,19 @@ class Batch:
     def seg(self, *els):
         self.body.append("*".join(els))
 
-    def text(self, control=1, group=None, st="0001", wrong=None):
+    def text(self, control=1, group=None, st="0001", wrong=None, created=CREATED):
         wrong = wrong or {}
         group = control if group is None else group   # each file's GS06 is its own, so a 999 can name it
         st_segs = [f"ST*837*{st}*{self.version}"] + self.body
         count = len(st_segs) + 1 + wrong.get("se_extra", 0)
-        segs = [isa(control), f"GS*HC*{self.sender}*CLEARHOUSE*{CREATED}*0930*{group}*X*{self.version}"]
+        segs = [isa(control, date=created[2:]), f"GS*HC*{self.sender}*CLEARHOUSE*{created}*0930*{group}*X*{self.version}"]
         segs += st_segs + [f"SE*{count}*{st}", f"GE*{1 + wrong.get('ge_extra', 0)}*{group}",
                            f"IEA*1*{control + wrong.get('iea_off', 0):09d}"]
         return "~\n".join(segs) + "~\n"
 
 
-def header(b, kind):
-    b.seg("BHT", "0019", "00", f"BATCH{kind}01", CREATED, "0930", "CH")
+def header(b, kind, created=CREATED):
+    b.seg("BHT", "0019", "00", f"BATCH{kind}01", created, "0930", "CH")
     b.seg("NM1", "41", "2", "RIVERBEND FAMILY CLINIC", "", "", "", "", "46", "RIVERBEND01")
     b.seg("PER", "IC", "BILLING OFFICE", "TE", "5555550100")
     b.seg("NM1", "40", "2", "CLEARHOUSE", "", "", "", "", "46", "CLEARHOUSE01")
@@ -251,6 +251,32 @@ def make_payer():
     return b.text(control=15)
 
 
+LATER = "20261201"   # BHT04 of payer-later-837p.x12: two weeks after the first batch
+
+
+def make_payer_later():
+    """Two weeks later: more Sun Plan claims, denied for the same kinds of reason as the first batch (another
+    therapy code without authorization, another late claim, another telehealth visit without 95), and Lakeshore
+    Health's claims, denied for units over its limit and a service it doesn't cover. Drafting from both weeks'
+    remittances together gives one pack for each payer."""
+    b = Batch("005010X222A1")
+    header(b, "W", created=LATER)
+    billing(b, 1)
+    claims = [
+        ("AUTH-21", "SUN7", [("90834", [], 140.00, 1, "20261117", "1")], "SUNPLAN", "SUN01", {}),
+        ("LATE-22", "SUN7", [("99214", [], 175.00, 1, "20260720", "1")], "SUNPLAN", "SUN01", {}),
+        ("TELE-23", "SUN7", [("99214", [], 175.00, 1, "20261118", "1")], "SUNPLAN", "SUN01", {"pos": "10"}),
+        ("TELE-OK-24", "SUN7", [("99214", ["95"], 175.00, 1, "20261118", "1")], "SUNPLAN", "SUN01", {"pos": "10"}),
+        ("UNITS-31", "LAK8", [("97110", ["GP"], 240.00, 4, "20261119", "1")], "LAKESHORE HEALTH", "LAKE01", {}),
+        ("UNITS-OK-32", "LAK8", [("97110", ["GP"], 120.00, 2, "20261119", "1")], "LAKESHORE HEALTH", "LAKE01", {}),
+        ("NOTCOV-33", "LAK8", [("97810", [], 90.00, 1, "20261120", "1")], "LAKESHORE HEALTH", "LAKE01", {}),
+    ]
+    for n, (account, prefix, lines, payer, payer_id, kw) in enumerate(claims):
+        subscriber(b, n + 2, 1, f"{prefix}{n + 20:05d}", "LINDQVIST", "MAJA", "19830614", "F", payer=payer, payer_id=payer_id)
+        claim_p(b, account, lines, ["M5450"] if prefix == "LAK8" else ["F329"], **kw)
+    return b.text(control=16, created=LATER)
+
+
 def envelope(kind, version, control, body, sender="SUNPLAN", receiver="RIVERBENDCLN", functional="FA", date="20261118"):
     """A response file: ISA, GS, one transaction of body segments, SE, GE, IEA. The payer sends it to the clinic."""
     segs = [("ISA*00*          *00*          *ZZ*" + f"{sender:<15}" + "*ZZ*" + f"{receiver:<15}" + "*" + date[2:] +
@@ -318,6 +344,32 @@ def make_clinic_277ca():
     return envelope("277", "005010X214", 23, body, functional="HN")
 
 
+def make_835(claims, control, date, payer="SUNPLAN", payer_id="SUN01", address=("1 SUN PLAZA", "SPRINGFIELD*IL*62701"), prefix="SP835"):
+    """A payer's remittance. claims: account, status, last, first, member, lines: (code, mods, charge, paid, units,
+    original units, date, [(group, reason, amount)], remarks)."""
+    paid_total = sum(l[3] for c in claims for l in c[5])
+    body = [f"BPR*I*{paid_total:.2f}*C*ACH*CCP*01*999999992*DA*123456*1512345678**01*999988880*DA*98765*{date}",
+            f"TRN*1*EFT{date}*1512345678", f"DTM*405*{date}",
+            f"N1*PR*{payer}", f"N3*{address[0]}", f"N4*{address[1]}", f"REF*2U*{payer_id}", "PER*BL*PROVIDER SERVICES*TE*5555550199",
+            f"N1*PE*RIVERBEND FAMILY CLINIC*XX*{BILLING_NPI}", "REF*TJ*371234567", "LX*1"]
+    for i, (account, status, last, first, member, lines) in enumerate(claims, 1):
+        charge = sum(l[2] for l in lines)
+        paid = sum(l[3] for l in lines)
+        patient = sum(a[2] for l in lines for a in l[7] if a[0] == "PR")
+        body += [f"CLP*{account}*{status}*{charge:.2f}*{paid:.2f}*{patient:.2f}*12*{prefix}{i:04d}*11*1",
+                 f"NM1*QC*1*{last}*{first}****MI*{member}"]
+        for code, mods, ch, pd, units, original, day, adjustments, remarks in lines:
+            svc = f"SVC*{':'.join(['HC', code] + mods)}*{ch:.2f}*{pd:.2f}**{units}"
+            if original is not None:
+                svc += f"**{original}"
+            body += [svc, f"DTM*472*{day}"]
+            for group in dict.fromkeys(a[0] for a in adjustments):
+                parts = [f"{a[1]}*{a[2]:.2f}" for a in adjustments if a[0] == group]
+                body.append(f"CAS*{group}*" + "**".join(parts))
+            body += [f"LQ*HE*{r}" for r in remarks]
+    return envelope("835", "005010X221A1", control, body, sender=payer.replace(" ", "")[:15], functional="HP", date=date)
+
+
 def make_sunplan_835():
     """Sun Plan's remittance for payer-837p.x12, edits-837p.x12 and one claim of coding-errors.x12."""
     claims = [
@@ -336,27 +388,29 @@ def make_sunplan_835():
         ("CODES-CLEAN-01", "4", "MORENO", "ALICE", "SUN500000", [("99213", ["25"], 125.00, 0, 1, None, "20261103", [("CO", "31", 125.00)], []),
                                                                  ("G0439", [], 175.00, 0, 1, None, "20261103", [("CO", "31", 175.00)], [])]),
     ]
-    paid_total = sum(l[3] for c in claims for l in c[5])
-    body = [f"BPR*I*{paid_total:.2f}*C*ACH*CCP*01*999999992*DA*123456*1512345678**01*999988880*DA*98765*20261120",
-            "TRN*1*EFT20261120*1512345678", "DTM*405*20261120",
-            "N1*PR*SUNPLAN", "N3*1 SUN PLAZA", "N4*SPRINGFIELD*IL*62701", "REF*2U*SUN01", "PER*BL*PROVIDER SERVICES*TE*5555550199",
-            f"N1*PE*RIVERBEND FAMILY CLINIC*XX*{BILLING_NPI}", "REF*TJ*371234567", "LX*1"]
-    for i, (account, status, last, first, member, lines) in enumerate(claims, 1):
-        charge = sum(l[2] for l in lines)
-        paid = sum(l[3] for l in lines)
-        patient = sum(a[2] for l in lines for a in l[7] if a[0] == "PR")
-        body += [f"CLP*{account}*{status}*{charge:.2f}*{paid:.2f}*{patient:.2f}*12*SP835{i:04d}*11*1",
-                 f"NM1*QC*1*{last}*{first}****MI*{member}"]
-        for code, mods, ch, pd, units, original, date, adjustments, remarks in lines:
-            svc = f"SVC*{':'.join(['HC', code] + mods)}*{ch:.2f}*{pd:.2f}**{units}"
-            if original is not None:
-                svc += f"**{original}"
-            body += [svc, f"DTM*472*{date}"]
-            for group in dict.fromkeys(a[0] for a in adjustments):
-                parts = [f"{a[1]}*{a[2]:.2f}" for a in adjustments if a[0] == group]
-                body.append(f"CAS*{group}*" + "**".join(parts))
-            body += [f"LQ*HE*{r}" for r in remarks]
-    return envelope("835", "005010X221A1", 24, body, functional="HP", date="20261120")
+    return make_835(claims, 24, "20261120")
+
+
+def make_sunplan_835_later():
+    """Sun Plan's remittance two weeks on, for its claims in payer-later-837p.x12."""
+    claims = [
+        ("AUTH-21", "4", "LINDQVIST", "MAJA", "SUN700020", [("90834", [], 140.00, 0, 1, None, "20261117", [("CO", "197", 140.00)], ["N54"])]),
+        ("LATE-22", "4", "LINDQVIST", "MAJA", "SUN700021", [("99214", [], 175.00, 0, 1, None, "20260720", [("CO", "29", 175.00)], [])]),
+        ("TELE-23", "4", "LINDQVIST", "MAJA", "SUN700022", [("99214", [], 175.00, 0, 1, None, "20261118", [("CO", "4", 175.00)], [])]),
+        ("TELE-OK-24", "1", "LINDQVIST", "MAJA", "SUN700023", [("99214", ["95"], 175.00, 120.00, 1, None, "20261118", [("CO", "45", 35.00), ("PR", "3", 20.00)], [])]),
+    ]
+    return make_835(claims, 26, "20261204", prefix="SP836")
+
+
+def make_lakeshore_835():
+    """Lakeshore Health's remittance for its claims in payer-later-837p.x12: units over its limit (CARC 119) and a
+    service it doesn't cover (CARC 96)."""
+    claims = [
+        ("UNITS-31", "1", "LINDQVIST", "MAJA", "LAK800024", [("97110", ["GP"], 240.00, 96.00, 2, 4, "20261119", [("CO", "45", 24.00), ("CO", "119", 120.00)], ["N362"])]),
+        ("UNITS-OK-32", "1", "LINDQVIST", "MAJA", "LAK800025", [("97110", ["GP"], 120.00, 96.00, 2, None, "20261119", [("CO", "45", 24.00)], [])]),
+        ("NOTCOV-33", "4", "LINDQVIST", "MAJA", "LAK800026", [("97810", [], 90.00, 0, 1, None, "20261120", [("CO", "96", 90.00)], ["N130"])]),
+    ]
+    return make_835(claims, 27, "20261205", payer="LAKESHORE HEALTH", payer_id="LAKE01", address=("40 HARBOR DRIVE", "LAKEVIEW*IL*60601"), prefix="LH835")
 
 
 def make_sunplan_271():
@@ -405,6 +459,8 @@ if __name__ == "__main__":
         f.write(make_edits())
     with open("payer-837p.x12", "w", newline="") as f:
         f.write(make_payer())
+    with open("payer-later-837p.x12", "w", newline="") as f:
+        f.write(make_payer_later())
     import os
     os.makedirs("responses", exist_ok=True)
     with open("structure-errors.x12") as f:
@@ -413,7 +469,8 @@ if __name__ == "__main__":
         env = f.read()
     for name, text in [("structure-999.x12", make_structure_999(structure)), ("envelope-999.x12", make_envelope_999(env)),
                        ("clinic-277ca.x12", make_clinic_277ca()), ("sunplan-835.x12", make_sunplan_835()),
-                       ("sunplan-271.x12", make_sunplan_271())]:
+                       ("sunplan-271.x12", make_sunplan_271()), ("sunplan-835-1204.x12", make_sunplan_835_later()),
+                       ("lakeshore-835-1205.x12", make_lakeshore_835())]:
         with open(os.path.join("responses", name), "w", newline="") as f:
             f.write(text)
     print("billing NPI", BILLING_NPI, "rendering", RENDER_NPI, "facility", FACILITY_NPI)

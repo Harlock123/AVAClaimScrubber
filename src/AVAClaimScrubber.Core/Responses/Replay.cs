@@ -347,30 +347,74 @@ public static class Replay
     /// </summary>
     public static JsonObject? Draft(ReplayReport report, DateOnly? today = null)
     {
-        var missed = report.Rows.Where(r => r.Verdict == Verdict.Missed && r.Claim != null && r.Kinds.Count > 0).ToList();
+        var missed = Missed([report]);
         if (missed.Count == 0) return null;
-        var payers = missed.Select(r => r.Claim!.Payer?[9].Trim() ?? "").Where(p => p.Length > 0).Distinct().ToList();
+        var payers = missed.Select(r => PayerId(r.Row)).Where(p => p.Length > 0).Distinct().ToList();
         var name = report.Response.Payer.Length > 0 ? report.Response.Payer : payers.FirstOrDefault() ?? "Payer";
-        var rules = new JsonArray();
-        string From(IEnumerable<ReplayRow> rows, string code) =>
-            $"{rows.Count()} denial{(rows.Count() == 1 ? "" : "s")} in {report.Response.Name} (CARC {code}: {ResponseCodes.Describe(ResponseCodes.Carc, code)})";
+        return Draft(missed, name, payers, today);
+    }
 
-        foreach (var g in missed.Where(r => r.Kinds.Contains("prior-auth")).GroupBy(r => r.Denial.Code))
+    /// <summary>
+    /// Draft rule packs from every open remittance at once, one for each payer (by the payer ID on the claims): the
+    /// same rules as <see cref="Draft(ReplayReport, DateOnly?)"/>, with each payer's denials across all the files
+    /// merged (every procedure denied for want of authorization, the shortest filing gap, the fewest units paid),
+    /// and each rule's "why" naming the files it rests on. A payer's pattern shows across weeks of remittances
+    /// where one file has a single example. Empty when there's nothing to draft.
+    /// </summary>
+    public static List<JsonObject> DraftAll(IEnumerable<ReplayReport> reports, DateOnly? today = null)
+    {
+        var missed = Missed(reports);
+        var packs = new List<JsonObject>();
+        foreach (var g in missed.GroupBy(x => PayerId(x.Row) is { Length: > 0 } id ? id : x.Report.Response.Payer, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key, StringComparer.Ordinal))
+        {
+            var rows = g.ToList();
+            var name = rows.Select(x => x.Report.Response.Payer).FirstOrDefault(p => p.Length > 0) ?? (g.Key.Length > 0 ? g.Key : "Payer");
+            var payers = rows.Select(x => PayerId(x.Row)).Where(p => p.Length > 0).Distinct().ToList();
+            if (Draft(rows, name, payers, today) is { } pack) packs.Add(pack);
+        }
+        return packs;
+    }
+
+    /// <summary>The file name a drafted pack is saved under by default: its payer ID, or its name.</summary>
+    public static string FileName(JsonObject pack)
+    {
+        var id = (pack["payers"] as JsonArray)?.Select(p => (string?)p).FirstOrDefault(p => p is { Length: > 0 }) ?? ((string?)pack["name"] ?? "payer").Replace(" (drafted)", "");
+        var safe = new string([.. id.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-')]).Trim('-');
+        return (safe.Length > 0 ? safe : "payer") + "-drafted-rules.json";
+    }
+
+    private static string PayerId(ReplayRow r) => r.Claim?.Payer?[9].Trim() ?? "";
+
+    private static List<(ReplayReport Report, ReplayRow Row)> Missed(IEnumerable<ReplayReport> reports) =>
+        [.. reports.SelectMany(rep => rep.Rows.Where(r => r.Verdict == Verdict.Missed && r.Claim != null && r.Kinds.Count > 0).Select(r => (rep, r)))];
+
+    private static JsonObject? Draft(List<(ReplayReport Report, ReplayRow Row)> missed, string name, IReadOnlyList<string> payers, DateOnly? today)
+    {
+        var files = missed.Select(x => x.Report.Response.Name).Distinct().ToList();
+        var rules = new JsonArray();
+        string From(IEnumerable<(ReplayReport Report, ReplayRow Row)> rows, string code)
+        {
+            var list = rows.ToList();
+            var names = list.Select(x => x.Report.Response.Name).Distinct().ToList();
+            return $"{list.Count} denial{(list.Count == 1 ? "" : "s")} in {Join(names)} (CARC {code}: {ResponseCodes.Describe(ResponseCodes.Carc, code)})";
+        }
+        JsonArray Procedures(IEnumerable<(ReplayReport Report, ReplayRow Row)> rows) =>
+            new([.. rows.Select(x => x.Row.Denial.Procedure).Where(p => p.Length > 0).Distinct().Order(StringComparer.Ordinal).Select(p => (JsonNode)p)]);
+
+        foreach (var g in missed.Where(x => x.Row.Kinds.Contains("prior-auth")).GroupBy(x => x.Row.Denial.Code))
             rules.Add(new JsonObject
             {
-                ["id"] = "draft-prior-auth", ["kind"] = "prior-auth",
-                ["procedures"] = new JsonArray([.. g.Select(r => r.Denial.Procedure).Where(p => p.Length > 0).Distinct().Order(StringComparer.Ordinal).Select(p => (JsonNode)p)]),
+                ["id"] = "draft-prior-auth", ["kind"] = "prior-auth", ["procedures"] = Procedures(g),
                 ["why"] = $"Drafted from {From(g, g.Key)}: check which procedures {name} needs authorization for.",
             });
-        foreach (var g in missed.Where(r => r.Kinds.Contains("not-covered")).GroupBy(r => r.Denial.Code))
+        foreach (var g in missed.Where(x => x.Row.Kinds.Contains("not-covered")).GroupBy(x => x.Row.Denial.Code))
             rules.Add(new JsonObject
             {
-                ["id"] = "draft-not-covered", ["kind"] = "not-covered",
-                ["procedures"] = new JsonArray([.. g.Select(r => r.Denial.Procedure).Where(p => p.Length > 0).Distinct().Order(StringComparer.Ordinal).Select(p => (JsonNode)p)]),
+                ["id"] = "draft-not-covered", ["kind"] = "not-covered", ["procedures"] = Procedures(g),
                 ["why"] = $"Drafted from {From(g, g.Key)}: check {name}'s coverage policy.",
             });
-        var late = missed.Where(r => r.Kinds.Contains("timely-filing") && r.Claim!.Created != null).ToList();
-        var gaps = late.Select(r => r.Claim!.Created!.Value.DayNumber - (r.Claim.Lines.Select(l => Parse.Date(l.DateText)).Where(d => d != null).Min() ?? r.Claim.Created.Value).DayNumber).Where(g => g > 1).ToList();
+        var late = missed.Where(x => x.Row.Kinds.Contains("timely-filing") && x.Row.Claim!.Created != null).ToList();
+        var gaps = late.Select(x => x.Row.Claim!.Created!.Value.DayNumber - (x.Row.Claim.Lines.Select(l => Parse.Date(l.DateText)).Where(d => d != null).Min() ?? x.Row.Claim.Created.Value).DayNumber).Where(g => g > 1).ToList();
         if (gaps.Count > 0)
             rules.Add(new JsonObject
             {
@@ -378,35 +422,47 @@ public static class Replay
                 ["why"] = $"Drafted from {From(late, "29")}: the shortest gap denied was {gaps.Min()} days, so the limit is less; check {name}'s contract for the real one.",
             });
         // A modifier a place of service needs: one every paid line of the procedure in that place had, and the denied one didn't.
-        foreach (var r in missed.Where(r => r.Kinds.Contains("require-modifier") && r.Denial.Procedure.Length > 0))
+        var reports = missed.Select(x => x.Report).Distinct().ToList();
+        foreach (var x in missed.Where(x => x.Row.Kinds.Contains("require-modifier") && x.Row.Denial.Procedure.Length > 0))
         {
+            var r = x.Row;
             var denied = r.Claim!.Lines.FirstOrDefault(l => l.Procedure == r.Denial.Procedure);
             if (denied == null) continue;
             var place = denied.PlaceOfService.Length > 0 ? denied.PlaceOfService : r.Claim.Facility;
-            var paid = report.Response.Remits.SelectMany(c => c.Lines.Where(l => l.Paid > 0 && l.Procedure == r.Denial.Procedure).Select(l => (c.Account, l)))
-                .Select(x => Find(x.Account, report.Results).Claim)
+            var paid = reports.SelectMany(rep => rep.Response.Remits.SelectMany(c => c.Lines.Where(l => l.Paid > 0 && l.Procedure == r.Denial.Procedure).Select(_ => Find(c.Account, rep.Results).Claim)))
                 .Where(c => c != null && (c.Lines.FirstOrDefault(l => l.Procedure == r.Denial.Procedure)?.PlaceOfService is { Length: > 0 } p ? p : c.Facility) == place)
+                .Distinct()
                 .Select(c => c!.Lines.First(l => l.Procedure == r.Denial.Procedure).Modifiers.ToHashSet())
                 .ToList();
             if (paid.Count == 0) continue;
             var common = paid.Aggregate((a, b) => [.. a.Intersect(b)]);
             common.ExceptWith(denied.Modifiers);
-            if (common.Count == 0 || rules.OfType<JsonObject>().Any(x => (string?)x["kind"] == "require-modifier" && (string?)x["modifier"] == common.Min())) continue;
+            if (common.Count == 0) continue;
+            var modifier = common.Min()!;
+            // The same modifier drafted again (another procedure, another file) adds its place and evidence to the rule.
+            if (rules.OfType<JsonObject>().FirstOrDefault(j => (string?)j["kind"] == "require-modifier" && (string?)j["modifier"] == modifier) is { } same)
+            {
+                var places = same["places"]!.AsArray();
+                if (!places.Any(p => (string?)p == place)) places.Add(place);
+                var evidence = missed.Where(m => m.Row.Kinds.Contains("require-modifier") && m.Row.Denial.Code == r.Denial.Code && m.Row.Denial.Procedure.Length > 0).ToList();
+                same["why"] = $"Drafted from {From(evidence, r.Denial.Code)}: {name} paid {Join([.. evidence.Select(m => m.Row.Denial.Procedure).Distinct()])} in place of service {Join([.. places.Select(p => (string?)p ?? "")])} with modifier {modifier}, and denied it without.";
+                continue;
+            }
             rules.Add(new JsonObject
             {
-                ["id"] = $"draft-modifier-{common.Min()!.ToLowerInvariant()}", ["kind"] = "require-modifier",
-                ["places"] = new JsonArray(place), ["modifier"] = common.Min(),
-                ["why"] = $"Drafted from {From([r], r.Denial.Code)}: {name} paid {r.Denial.Procedure} in place of service {place} with modifier {common.Min()}, and denied it without.",
+                ["id"] = $"draft-modifier-{modifier.ToLowerInvariant()}", ["kind"] = "require-modifier",
+                ["places"] = new JsonArray(place), ["modifier"] = modifier,
+                ["why"] = $"Drafted from {From([x], r.Denial.Code)}: {name} paid {r.Denial.Procedure} in place of service {place} with modifier {modifier}, and denied it without.",
             });
         }
-        foreach (var g in missed.Where(r => r.Kinds.Contains("max-units") && r.Denial.Procedure.Length > 0).GroupBy(r => r.Denial.Procedure))
+        foreach (var g in missed.Where(x => x.Row.Kinds.Contains("max-units") && x.Row.Denial.Procedure.Length > 0).GroupBy(x => x.Row.Denial.Procedure))
         {
-            var paid = g.Select(r => report.Response.Remits.FirstOrDefault(x => x.Account == r.Denial.Account)?.Lines.FirstOrDefault(l => l.Number == r.Denial.Line)?.Units).Where(u => u > 0).ToList();
+            var paid = g.Select(x => x.Report.Response.Remits.FirstOrDefault(c => c.Account == x.Row.Denial.Account)?.Lines.FirstOrDefault(l => l.Number == x.Row.Denial.Line)?.Units).Where(u => u > 0).ToList();
             if (paid.Count == 0) continue;
             rules.Add(new JsonObject
             {
                 ["id"] = $"draft-units-{g.Key.ToLowerInvariant()}", ["kind"] = "max-units", ["procedure"] = g.Key, ["units"] = paid.Min(),
-                ["why"] = $"Drafted from {From(g, g.First().Denial.Code)}: {name} paid {paid.Min():0.##} units of {g.Key}.",
+                ["why"] = $"Drafted from {From(g, g.First().Row.Denial.Code)}: {name} paid {paid.Min():0.##} units of {g.Key}.",
             });
         }
         if (rules.Count == 0) return null;
@@ -416,10 +472,13 @@ public static class Replay
             ["name"] = $"{name} (drafted)",
             // The day it was drafted: the remittance's own date is about the claims, so it stays out of the pack.
             ["version"] = (today ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy.MM.dd", CultureInfo.InvariantCulture),
-            ["description"] = $"Drafted by AVA Claim Scrubber from the denials in {report.Response.Name} that a payer rule would have caught. A draft: check each rule against {name}'s policy before relying on it.",
+            ["description"] = $"Drafted by AVA Claim Scrubber from the denials in {Join(files)} that a payer rule would have caught. A draft: check each rule against {name}'s policy before relying on it.",
             ["draft"] = true,
             ["payers"] = new JsonArray([.. payers.Select(p => (JsonNode)p)]),
             ["rules"] = rules,
         };
     }
+
+    private static string Join(IReadOnlyList<string> names) =>
+        names.Count <= 1 ? string.Concat(names) : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1];
 }

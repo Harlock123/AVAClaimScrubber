@@ -61,6 +61,21 @@ public sealed partial class MainWindow
             });
             return;
         }
+        // Several remittances: a payer's pattern shows across them, so draft from them all, one pack for each payer.
+        var remits = Replays.Where(r => r.Response.Kind == "835").ToList();
+        if (remits.Count > 1 && Replay.DraftAll(remits).Count is var packs and > 0)
+        {
+            var all = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+            var button = new Button { Content = "Draft From All Remittances…", Margin = new Thickness(0, 0, 10, 0) };
+            button.Click += async (_, _) => await SaveDrafts();
+            all.Children.Add(button);
+            all.Children.Add(new TextBlock
+            {
+                Text = $"{remits.Count} remittances open: {packs} payer{(packs == 1 ? "" : "s")} with denials a payer rule would catch. Drafting from them together merges each payer's evidence into one pack.",
+                Foreground = Look.Dim, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 760,
+            });
+            ResponsesPanel.Children.Add(all);
+        }
         foreach (var rep in Replays)
         {
             var head = new WrapPanel { Margin = new Thickness(0, 14, 0, 2) };
@@ -136,6 +151,34 @@ public sealed partial class MainWindow
         {
             Say("Couldn't save the draft: " + e.Message);
         }
+    }
+
+    /// <summary>
+    /// Saves the packs drafted from every open remittance together, one for each payer (each asked where), for the
+    /// person to check and then add.
+    /// </summary>
+    public async Task SaveDrafts()
+    {
+        var drafts = Replay.DraftAll(Replays.Where(r => r.Response.Kind == "835"));
+        if (drafts.Count == 0) { Say("Nothing to draft: no missed denial a payer rule would catch."); return; }
+        var saved = new List<string>();
+        foreach (var (draft, i) in drafts.Select((d, i) => (d, i)))
+        {
+            var payer = ((string?)draft["name"] ?? "").Replace(" (drafted)", "");
+            var path = await PickSaveFile($"Save {payer}'s drafted rule pack{(drafts.Count > 1 ? $" ({i + 1} of {drafts.Count})" : "")}", Replay.FileName(draft));
+            if (path == null) continue;
+            try
+            {
+                File.WriteAllText(path, Replay.Text(draft));
+                saved.Add($"{Path.GetFileName(path)} ({draft["rules"]!.AsArray().Count} rule{(draft["rules"]!.AsArray().Count == 1 ? "" : "s")} for {payer})");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Say("Couldn't save the draft: " + e.Message);
+                return;
+            }
+        }
+        if (saved.Count > 0) Say($"Saved {string.Join(" and ", saved)}. Check each rule against the payer's policy, then File › Add Rule Pack… to use it.");
     }
 
     /// <summary>Writes a report of every open file (and response replay): .html, or .xlsx for a workbook.</summary>
